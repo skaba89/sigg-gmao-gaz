@@ -19,7 +19,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Plus, Search, Filter, Eye, Edit, Server, X,
+  Plus, Search, Filter, Eye, Edit, Server, X, Trash2,
 } from 'lucide-react';
 import { api, formatDate } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -54,6 +54,23 @@ const critBadgeClass: Record<string, string> = {
   FAIBLE: 'bg-slate-400',
 };
 
+const hardcodedCategories = [
+  { value: 'pipelines', label: 'Pipelines' },
+  { value: 'compresseurs', label: 'Compresseurs' },
+  { value: 'turbines', label: 'Turbines' },
+  { value: 'generateurs', label: 'Générateurs' },
+  { value: 'vannes', label: 'Vannes' },
+  { value: 'capteurs', label: 'Capteurs' },
+  { value: 'systemes-electriques', label: 'Systèmes électriques' },
+  { value: 'infrastructures-gaz', label: 'Infrastructures gaz' },
+];
+
+const emptyCreateForm = {
+  name: '', code: '', serialNumber: '', categoryId: '', siteId: '',
+  manufacturer: '', model: '', year: '', criticality: 'MOYENNE', status: 'OPERATIONNEL',
+  description: '', currentHealthScore: 100,
+};
+
 export function EquipmentView() {
   const { toast } = useToast();
   const [equipment, setEquipment] = useState<any[]>([]);
@@ -64,13 +81,13 @@ export function EquipmentView() {
   const [selectedEq, setSelectedEq] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [sites, setSites] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [createForm, setCreateForm] = useState<any>({
-    name: '', code: '', serialNumber: '', categoryId: '', siteId: '',
-    manufacturer: '', model: '', year: '', criticality: 'MOYENNE', status: 'OPERATIONNEL',
-    description: '', currentHealthScore: 100,
-  });
+  const [createForm, setCreateForm] = useState<any>({ ...emptyCreateForm });
+  const [editForm, setEditForm] = useState<any>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +101,12 @@ export function EquipmentView() {
         const res = await api.getEquipment(params.toString() ? `?${params.toString()}` : '');
         if (!cancelled) {
           setEquipment(res.data || []);
+          // Extract unique categories from equipment data
+          const cats = (res.data || [])
+            .map((eq: any) => eq.category)
+            .filter(Boolean)
+            .filter((cat: any, idx: number, arr: any[]) => arr.findIndex((c: any) => c.id === cat.id) === idx);
+          if (cats.length > 0) setCategories(cats);
           setLoading(false);
         }
       } catch (e: any) {
@@ -107,6 +130,12 @@ export function EquipmentView() {
     params.set('pageSize', '50');
     api.getEquipment(params.toString() ? `?${params.toString()}` : '').then((res) => {
       setEquipment(res.data || []);
+      // Extract unique categories from equipment data
+      const cats = (res.data || [])
+        .map((eq: any) => eq.category)
+        .filter(Boolean)
+        .filter((cat: any, idx: number, arr: any[]) => arr.findIndex((c: any) => c.id === cat.id) === idx);
+      if (cats.length > 0) setCategories(cats);
       setLoading(false);
     }).catch((e: any) => {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
@@ -124,22 +153,75 @@ export function EquipmentView() {
     }
   };
 
+  const handleOpenEdit = () => {
+    if (!selectedEq) return;
+    setEditForm({
+      status: selectedEq.status,
+      criticality: selectedEq.criticality,
+      currentHealthScore: selectedEq.currentHealthScore,
+      description: selectedEq.description || '',
+    });
+    setShowEdit(true);
+  };
+
+  const handleEdit = async () => {
+    if (!selectedEq) return;
+    setSaving(true);
+    try {
+      const updated = await api.updateEquipment(selectedEq.id, {
+        status: editForm.status,
+        criticality: editForm.criticality,
+        currentHealthScore: parseInt(editForm.currentHealthScore) || 0,
+        description: editForm.description,
+      });
+      toast({ title: 'Succès', description: 'Équipement mis à jour' });
+      setShowEdit(false);
+      setSelectedEq(updated);
+      loadData();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedEq) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/equipment/${selectedEq.id}`, { method: 'DELETE' });
+      toast({ title: 'Succès', description: 'Équipement supprimé' });
+      setShowDeleteConfirm(false);
+      setShowDetail(false);
+      setSelectedEq(null);
+      loadData();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreate = async () => {
+    if (!createForm.name || !createForm.code) {
+      toast({ title: 'Erreur', description: 'Le nom et le code sont requis', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
     try {
       await api.createEquipment({
         ...createForm,
         year: createForm.year ? parseInt(createForm.year) : undefined,
+        currentHealthScore: parseInt(createForm.currentHealthScore) || 100,
       });
       toast({ title: 'Succès', description: 'Équipement créé avec succès' });
       setShowCreate(false);
-      setCreateForm({
-        name: '', code: '', serialNumber: '', categoryId: '', siteId: '',
-        manufacturer: '', model: '', year: '', criticality: 'MOYENNE', status: 'OPERATIONNEL',
-        description: '', currentHealthScore: 100,
-      });
+      setCreateForm({ ...emptyCreateForm });
       loadData();
     } catch (e: any) {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -279,7 +361,7 @@ export function EquipmentView() {
       </Card>
 
       {/* Detail Dialog */}
-      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+      <Dialog open={showDetail} onOpenChange={(open) => { setShowDetail(open); if (!open) setSelectedEq(null); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -356,13 +438,105 @@ export function EquipmentView() {
                   <p className="text-sm mt-1 p-3 bg-muted/50 rounded-lg">{selectedEq.description}</p>
                 </div>
               )}
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2 border-t">
+                <Button onClick={handleOpenEdit} variant="outline" size="sm">
+                  <Edit className="w-4 h-4 mr-1.5" />
+                  Modifier
+                </Button>
+                <Button onClick={() => setShowDeleteConfirm(true)} variant="destructive" size="sm">
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                  Supprimer
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
+      {/* Edit Dialog */}
+      <Dialog open={showEdit} onOpenChange={(open) => { setShowEdit(open); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Modifier l&apos;équipement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Statut</Label>
+                <Select value={editForm.status} onValueChange={(v) => setEditForm({...editForm, status: v})}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OPERATIONNEL">Opérationnel</SelectItem>
+                    <SelectItem value="EN_MAINTENANCE">En maintenance</SelectItem>
+                    <SelectItem value="EN_PANNE">En panne</SelectItem>
+                    <SelectItem value="HORS_SERVICE">Hors service</SelectItem>
+                    <SelectItem value="MIS_AU_REBUT">Mis au rebut</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Criticité</Label>
+                <Select value={editForm.criticality} onValueChange={(v) => setEditForm({...editForm, criticality: v})}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CRITIQUE">Critique</SelectItem>
+                    <SelectItem value="IMPORTANTE">Importante</SelectItem>
+                    <SelectItem value="MOYENNE">Moyenne</SelectItem>
+                    <SelectItem value="FAIBLE">Faible</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Score de santé ({editForm.currentHealthScore}%)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={editForm.currentHealthScore}
+                onChange={(e) => setEditForm({...editForm, currentHealthScore: e.target.value})}
+                className="h-9"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Description</Label>
+              <Textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Annuler</Button>
+            <Button onClick={handleEdit} disabled={saving} className="bg-primary hover:bg-primary/90">
+              {saving ? 'Enregistrement...' : 'Sauvegarder'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmer la suppression</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Êtes-vous sûr de vouloir supprimer l&apos;équipement <strong>{selectedEq?.name}</strong> ? Cette action est irréversible.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Annuler</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={saving}>
+              {saving ? 'Suppression...' : 'Supprimer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Create Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) setCreateForm({ ...emptyCreateForm }); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nouvel Équipement</DialogTitle>
@@ -379,6 +553,27 @@ export function EquipmentView() {
             <div>
               <Label className="text-xs">Numéro de série</Label>
               <Input value={createForm.serialNumber} onChange={(e) => setCreateForm({...createForm, serialNumber: e.target.value})} className="h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Site *</Label>
+              <Select value={createForm.siteId} onValueChange={(v) => setCreateForm({...createForm, siteId: v})}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Sélectionner un site" /></SelectTrigger>
+                <SelectContent>
+                  {sites.map((site) => <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Catégorie *</Label>
+              <Select value={createForm.categoryId} onValueChange={(v) => setCreateForm({...createForm, categoryId: v})}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Sélectionner une catégorie" /></SelectTrigger>
+                <SelectContent>
+                  {categories.length > 0
+                    ? categories.map((cat) => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)
+                    : hardcodedCategories.map((cat) => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)
+                  }
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Fabricant</Label>
@@ -422,8 +617,10 @@ export function EquipmentView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Annuler</Button>
-            <Button onClick={handleCreate} className="bg-primary hover:bg-primary/90">Créer</Button>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setCreateForm({ ...emptyCreateForm }); }}>Annuler</Button>
+            <Button onClick={handleCreate} disabled={saving} className="bg-primary hover:bg-primary/90">
+              {saving ? 'Création...' : 'Créer'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

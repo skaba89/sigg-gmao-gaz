@@ -6,18 +6,22 @@ interface AppState {
   activeModule: ModuleKey;
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
+  searchQuery: string;
   setActiveModule: (module: ModuleKey) => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
+  setSearchQuery: (query: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   activeModule: 'dashboard',
-  sidebarOpen: true,
+  sidebarOpen: false,
   sidebarCollapsed: false,
-  setActiveModule: (module) => set({ activeModule: module }),
+  searchQuery: '',
+  setActiveModule: (module) => set({ activeModule: module, sidebarOpen: false }),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  setSearchQuery: (query) => set({ searchQuery: query }),
 }));

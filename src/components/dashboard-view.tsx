@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,10 @@ import {
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Legend,
+  Tooltip, ResponsiveContainer, AreaChart, Area,
 } from 'recharts';
 import { api, formatGNF, formatNumber } from '@/lib/api';
+import { useAppStore, type ModuleKey } from '@/store/app-store';
 
 // Animated counter component
 function AnimatedCounter({ value, duration = 1500 }: { value: number; duration?: number }) {
@@ -113,6 +114,7 @@ const priorityLabels: Record<string, string> = {
 };
 
 export function DashboardView() {
+  const { setActiveModule } = useAppStore();
   const [stats, setStats] = useState<any>(null);
   const [charts, setCharts] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +129,10 @@ export function DashboardView() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  const navigateTo = useCallback((module: ModuleKey) => {
+    setActiveModule(module);
+  }, [setActiveModule]);
 
   if (loading) {
     return (
@@ -154,7 +160,20 @@ export function DashboardView() {
     );
   }
 
-  const kpis = [
+  const kpis: {
+    title: string;
+    value: number;
+    icon: React.ElementType;
+    trend: string;
+    trendUp: boolean;
+    glowClass: string;
+    iconBg: string;
+    iconColor: string;
+    isCurrency?: boolean;
+    isPercent?: boolean;
+    suffix?: string;
+    module: ModuleKey;
+  }[] = [
     {
       title: 'Équipements',
       value: stats?.counts?.totalEquipment || 0,
@@ -164,6 +183,7 @@ export function DashboardView() {
       glowClass: 'kpi-glow-teal',
       iconBg: 'bg-teal-600/15 dark:bg-teal-500/15',
       iconColor: 'text-teal-600 dark:text-teal-400',
+      module: 'equipment',
     },
     {
       title: 'OT Actifs',
@@ -174,6 +194,7 @@ export function DashboardView() {
       glowClass: 'kpi-glow-orange',
       iconBg: 'bg-orange-500/15',
       iconColor: 'text-orange-600 dark:text-orange-400',
+      module: 'work-orders',
     },
     {
       title: 'Incidents Critiques',
@@ -184,6 +205,7 @@ export function DashboardView() {
       glowClass: 'kpi-glow-red',
       iconBg: 'bg-red-500/15',
       iconColor: 'text-red-600 dark:text-red-400',
+      module: 'incidents',
     },
     {
       title: 'Coût Maintenance',
@@ -195,6 +217,7 @@ export function DashboardView() {
       iconBg: 'bg-violet-500/15',
       iconColor: 'text-violet-600 dark:text-violet-400',
       isCurrency: true,
+      module: 'financial',
     },
     {
       title: 'Disponibilité',
@@ -206,6 +229,7 @@ export function DashboardView() {
       iconBg: 'bg-green-500/15',
       iconColor: 'text-green-600 dark:text-green-400',
       isPercent: true,
+      module: 'equipment',
     },
     {
       title: 'MTTR',
@@ -217,6 +241,7 @@ export function DashboardView() {
       iconBg: 'bg-blue-500/15',
       iconColor: 'text-blue-600 dark:text-blue-400',
       suffix: 'h',
+      module: 'work-orders',
     },
   ];
 
@@ -258,7 +283,10 @@ export function DashboardView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.05 }}
           >
-            <Card className={`relative overflow-hidden ${kpi.glowClass}`}>
+            <Card
+              className={`relative overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.02] hover:border-primary/30 ${kpi.glowClass}`}
+              onClick={() => navigateTo(kpi.module)}
+            >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div className={`p-2 rounded-lg ${kpi.iconBg}`}>
@@ -449,14 +477,23 @@ export function DashboardView() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold">Ordres de Travail Récents</CardTitle>
-                <Button variant="ghost" size="sm" className="text-xs text-primary h-7">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-primary h-7"
+                  onClick={() => navigateTo('work-orders')}
+                >
                   Voir tout <ChevronRight className="w-3 h-3 ml-1" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-2 max-h-72 overflow-y-auto">
               {(stats?.recentWorkOrders || []).map((wo: any) => (
-                <div key={wo.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                <div
+                  key={wo.id}
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => navigateTo('work-orders')}
+                >
                   <div className={`w-1.5 h-8 rounded-full ${woStatusColors[wo.status] || 'bg-slate-400'}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{wo.title}</p>
@@ -492,7 +529,11 @@ export function DashboardView() {
             </CardHeader>
             <CardContent className="space-y-2 max-h-72 overflow-y-auto">
               {(stats?.recentIncidents || []).filter((inc: any) => inc.severity === 'CRITIQUE' || inc.status === 'OUVERT' || inc.status === 'EN_COURS').map((inc: any) => (
-                <div key={inc.id} className="flex items-start gap-3 p-2 rounded-lg bg-red-500/5 dark:bg-red-500/10 border border-red-500/20">
+                <div
+                  key={inc.id}
+                  className="flex items-start gap-3 p-2 rounded-lg bg-red-500/5 dark:bg-red-500/10 border border-red-500/20 cursor-pointer hover:bg-red-500/10 dark:hover:bg-red-500/15 transition-colors"
+                  onClick={() => navigateTo('incidents')}
+                >
                   <AlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${inc.severity === 'CRITIQUE' ? 'text-red-500 animate-pulse-critical' : 'text-orange-500'}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{inc.title}</p>
@@ -506,7 +547,10 @@ export function DashboardView() {
                 </div>
               ))}
               {stats?.counts?.overduePlans > 0 && (
-                <div className="flex items-start gap-3 p-2 rounded-lg bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20">
+                <div
+                  className="flex items-start gap-3 p-2 rounded-lg bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/10 dark:hover:bg-amber-500/15 transition-colors"
+                  onClick={() => navigateTo('maintenance')}
+                >
                   <Clock className="w-4 h-4 mt-0.5 text-amber-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">Plans en retard</p>
@@ -515,7 +559,10 @@ export function DashboardView() {
                 </div>
               )}
               {stats?.counts?.lowStockParts > 0 && (
-                <div className="flex items-start gap-3 p-2 rounded-lg bg-orange-500/5 dark:bg-orange-500/10 border border-orange-500/20">
+                <div
+                  className="flex items-start gap-3 p-2 rounded-lg bg-orange-500/5 dark:bg-orange-500/10 border border-orange-500/20 cursor-pointer hover:bg-orange-500/10 dark:hover:bg-orange-500/15 transition-colors"
+                  onClick={() => navigateTo('stock')}
+                >
                   <Wrench className="w-4 h-4 mt-0.5 text-orange-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">Stock faible</p>
@@ -535,7 +582,11 @@ export function DashboardView() {
             </CardHeader>
             <CardContent className="space-y-3 max-h-72 overflow-y-auto">
               {eqHealthData.map((eq: any) => (
-                <div key={eq.code} className="space-y-1">
+                <div
+                  key={eq.code}
+                  className="space-y-1 cursor-pointer rounded-md p-1.5 -m-1.5 hover:bg-muted/50 transition-colors"
+                  onClick={() => navigateTo('equipment')}
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium truncate max-w-[60%]">{eq.name}</span>
                     <span className={`text-xs font-bold ${

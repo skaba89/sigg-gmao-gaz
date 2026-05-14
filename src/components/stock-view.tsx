@@ -18,10 +18,30 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Plus, Search, Package, ArrowUpDown, AlertTriangle,
+  Plus, Search, Package, ArrowUpDown, AlertTriangle, Eye, Edit,
 } from 'lucide-react';
 import { api, formatGNF, formatDate } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+
+const hardcodedPartCategories = [
+  { value: 'filtres', label: 'Filtres' },
+  { value: 'joints', label: 'Joints' },
+  { value: 'capteurs', label: 'Capteurs' },
+  { value: 'fusibles', label: 'Fusibles' },
+  { value: 'courroies', label: 'Courroies' },
+  { value: 'lubrifiants', label: 'Lubrifiants' },
+  { value: 'outillage', label: 'Outillage' },
+  { value: 'autre', label: 'Autre' },
+];
+
+const emptyCreateForm = {
+  name: '', code: '', categoryId: '', unit: 'unite', unitPrice: '',
+  minStockLevel: '', currentStock: '', description: '',
+};
+
+const emptyMovementForm = {
+  partId: '', warehouseId: '', type: 'ENTREE', quantity: '', notes: '',
+};
 
 export function StockView() {
   const { toast } = useToast();
@@ -34,14 +54,14 @@ export function StockView() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showMovement, setShowMovement] = useState(false);
-  const [createForm, setCreateForm] = useState<any>({
-    name: '', code: '', categoryId: '', unit: 'unite', unitPrice: '',
-    minStockLevel: '', currentStock: '', description: '',
-  });
-  const [movementForm, setMovementForm] = useState<any>({
-    partId: '', warehouseId: '', type: 'ENTREE', quantity: '', notes: '',
-  });
+  const [showPartDetail, setShowPartDetail] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<any>(null);
+  const [editPartForm, setEditPartForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  const [createForm, setCreateForm] = useState<any>({ ...emptyCreateForm });
+  const [movementForm, setMovementForm] = useState<any>({ ...emptyMovementForm });
   const [categories, setCategories] = useState<any[]>([]);
+  const [defaultUserId, setDefaultUserId] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -49,11 +69,26 @@ export function StockView() {
       api.getParts('?pageSize=100'),
       api.getWarehouses(),
       api.getSuppliers(),
-    ]).then(([partsRes, warehousesRes, suppliersRes]) => {
+      api.getUsers(),
+    ]).then(([partsRes, warehousesRes, suppliersRes, usersRes]) => {
       if (!cancelled) {
-        setParts(partsRes.data || []);
+        const partsData = partsRes.data || [];
+        setParts(partsData);
         setWarehouses(Array.isArray(warehousesRes) ? warehousesRes : warehousesRes?.data || []);
         setSuppliers(Array.isArray(suppliersRes) ? suppliersRes : suppliersRes?.data || []);
+
+        // Extract unique categories from parts
+        const cats = partsData
+          .map((p: any) => p.category)
+          .filter(Boolean)
+          .filter((cat: any, idx: number, arr: any[]) => arr.findIndex((c: any) => c.id === cat.id) === idx);
+        if (cats.length > 0) setCategories(cats);
+
+        // Pick first SUPER_ADMIN or first user as default performedById
+        const users = Array.isArray(usersRes) ? usersRes : usersRes?.data || [];
+        const admin = users.find((u: any) => u.role === 'SUPER_ADMIN') || users[0];
+        if (admin) setDefaultUserId(admin.id);
+
         setLoading(false);
       }
     }).catch((e: any) => {
@@ -78,9 +113,18 @@ export function StockView() {
       api.getWarehouses(),
       api.getSuppliers(),
     ]).then(([partsRes, warehousesRes, suppliersRes]) => {
-      setParts(partsRes.data || []);
+      const partsData = partsRes.data || [];
+      setParts(partsData);
       setWarehouses(Array.isArray(warehousesRes) ? warehousesRes : warehousesRes?.data || []);
       setSuppliers(Array.isArray(suppliersRes) ? suppliersRes : suppliersRes?.data || []);
+
+      // Extract unique categories from parts
+      const cats = partsData
+        .map((p: any) => p.category)
+        .filter(Boolean)
+        .filter((cat: any, idx: number, arr: any[]) => arr.findIndex((c: any) => c.id === cat.id) === idx);
+      if (cats.length > 0) setCategories(cats);
+
       setLoading(false);
     }).catch((e: any) => {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
@@ -95,6 +139,11 @@ export function StockView() {
   };
 
   const handleCreatePart = async () => {
+    if (!createForm.name || !createForm.code) {
+      toast({ title: 'Erreur', description: 'Le nom et le code sont requis', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
     try {
       await api.createPart({
         ...createForm,
@@ -105,20 +154,69 @@ export function StockView() {
       });
       toast({ title: 'Succès', description: 'Pièce créée' });
       setShowCreate(false);
+      setCreateForm({ ...emptyCreateForm });
       loadData();
     } catch (e: any) {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleCreateMovement = async () => {
+    if (!movementForm.partId || !movementForm.warehouseId || !movementForm.quantity) {
+      toast({ title: 'Erreur', description: 'Pièce, entrepôt et quantité requis', variant: 'destructive' });
+      return;
+    }
+    if (!defaultUserId) {
+      toast({ title: 'Erreur', description: 'Aucun utilisateur disponible pour effectuer le mouvement', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
     try {
-      await api.createStockMovement(movementForm);
+      await api.createStockMovement({
+        ...movementForm,
+        quantity: parseInt(movementForm.quantity),
+        performedById: defaultUserId,
+      });
       toast({ title: 'Succès', description: 'Mouvement enregistré' });
       setShowMovement(false);
+      setMovementForm({ ...emptyMovementForm });
       loadData();
     } catch (e: any) {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleViewPart = (part: any) => {
+    setSelectedPart(part);
+    setEditPartForm({
+      currentStock: part.currentStock,
+      minStockLevel: part.minStockLevel,
+      unitPrice: part.unitPrice,
+    });
+    setShowPartDetail(true);
+  };
+
+  const handleUpdatePart = async () => {
+    if (!selectedPart) return;
+    setSaving(true);
+    try {
+      const updated = await api.updatePart(selectedPart.id, {
+        currentStock: parseInt(editPartForm.currentStock) || 0,
+        minStockLevel: parseInt(editPartForm.minStockLevel) || 0,
+        unitPrice: parseFloat(editPartForm.unitPrice) || 0,
+      });
+      toast({ title: 'Succès', description: 'Pièce mise à jour' });
+      setSelectedPart(updated);
+      setShowPartDetail(false);
+      loadData();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -184,20 +282,25 @@ export function StockView() {
                       <TableHead className="hidden lg:table-cell">Min</TableHead>
                       <TableHead className="hidden lg:table-cell">Prix unitaire</TableHead>
                       <TableHead>Statut</TableHead>
+                      <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <TableRow key={i}>
-                          {Array.from({ length: 7 }).map((_, j) => (
+                          {Array.from({ length: 8 }).map((_, j) => (
                             <TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>
                           ))}
                         </TableRow>
                       ))
                     ) : (
                       parts.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase())).map((part) => (
-                        <TableRow key={part.id} className={isLowStock(part) ? 'bg-red-500/5' : ''}>
+                        <TableRow
+                          key={part.id}
+                          className={`cursor-pointer hover:bg-muted/50 ${isLowStock(part) ? 'bg-red-500/5' : ''}`}
+                          onClick={() => handleViewPart(part)}
+                        >
                           <TableCell className="font-mono text-xs">{part.code}</TableCell>
                           <TableCell>
                             <p className="font-medium text-sm">{part.name}</p>
@@ -226,6 +329,11 @@ export function StockView() {
                             ) : (
                               <Badge className="text-[10px] bg-green-600 text-white border-0">OK</Badge>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleViewPart(part); }}>
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -346,8 +454,80 @@ export function StockView() {
         </TabsContent>
       </Tabs>
 
+      {/* Part Detail / Edit Dialog */}
+      <Dialog open={showPartDetail} onOpenChange={(open) => { setShowPartDetail(open); if (!open) setSelectedPart(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" />
+              {selectedPart?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedPart && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Code</Label>
+                  <p className="text-sm font-mono">{selectedPart.code}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Catégorie</Label>
+                  <p className="text-sm">{selectedPart.category?.name || '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Fabricant</Label>
+                  <p className="text-sm">{selectedPart.manufacturer || '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Référence</Label>
+                  <p className="text-sm">{selectedPart.partNumber || '-'}</p>
+                </div>
+              </div>
+              <div className="border-t pt-4 space-y-3">
+                <h4 className="text-sm font-semibold">Modifier les informations de stock</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">Stock actuel</Label>
+                    <Input
+                      type="number"
+                      value={editPartForm.currentStock}
+                      onChange={(e) => setEditPartForm({...editPartForm, currentStock: e.target.value})}
+                      className="h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Stock minimum</Label>
+                    <Input
+                      type="number"
+                      value={editPartForm.minStockLevel}
+                      onChange={(e) => setEditPartForm({...editPartForm, minStockLevel: e.target.value})}
+                      className="h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Prix unitaire</Label>
+                    <Input
+                      type="number"
+                      value={editPartForm.unitPrice}
+                      onChange={(e) => setEditPartForm({...editPartForm, unitPrice: e.target.value})}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPartDetail(false)}>Fermer</Button>
+            <Button onClick={handleUpdatePart} disabled={saving} className="bg-primary hover:bg-primary/90">
+              {saving ? 'Enregistrement...' : 'Sauvegarder'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Create Part Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) setCreateForm({ ...emptyCreateForm }); }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Nouvelle Pièce</DialogTitle>
@@ -355,21 +535,35 @@ export function StockView() {
           <div className="grid grid-cols-2 gap-4">
             <div><Label className="text-xs">Nom *</Label><Input value={createForm.name} onChange={(e) => setCreateForm({...createForm, name: e.target.value})} className="h-9" /></div>
             <div><Label className="text-xs">Code *</Label><Input value={createForm.code} onChange={(e) => setCreateForm({...createForm, code: e.target.value})} className="h-9" placeholder="P-XXX" /></div>
-            <div><Label className="text-xs">Prix unitaire (GNF)</Label><Input value={createForm.unitPrice} onChange={(e) => setCreateForm({...createForm, unitPrice: e.target.value})} className="h-9" type="number" /></div>
+            <div>
+              <Label className="text-xs">Catégorie</Label>
+              <Select value={createForm.categoryId} onValueChange={(v) => setCreateForm({...createForm, categoryId: v})}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Sélectionner..." /></SelectTrigger>
+                <SelectContent>
+                  {categories.length > 0
+                    ? categories.map((cat) => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)
+                    : hardcodedPartCategories.map((cat) => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)
+                  }
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label className="text-xs">Unité</Label><Input value={createForm.unit} onChange={(e) => setCreateForm({...createForm, unit: e.target.value})} className="h-9" /></div>
+            <div><Label className="text-xs">Prix unitaire (GNF)</Label><Input value={createForm.unitPrice} onChange={(e) => setCreateForm({...createForm, unitPrice: e.target.value})} className="h-9" type="number" /></div>
             <div><Label className="text-xs">Stock actuel</Label><Input value={createForm.currentStock} onChange={(e) => setCreateForm({...createForm, currentStock: e.target.value})} className="h-9" type="number" /></div>
             <div><Label className="text-xs">Stock minimum</Label><Input value={createForm.minStockLevel} onChange={(e) => setCreateForm({...createForm, minStockLevel: e.target.value})} className="h-9" type="number" /></div>
             <div className="col-span-2"><Label className="text-xs">Description</Label><Textarea value={createForm.description} onChange={(e) => setCreateForm({...createForm, description: e.target.value})} rows={2} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Annuler</Button>
-            <Button onClick={handleCreatePart} className="bg-primary hover:bg-primary/90">Créer</Button>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setCreateForm({ ...emptyCreateForm }); }}>Annuler</Button>
+            <Button onClick={handleCreatePart} disabled={saving} className="bg-primary hover:bg-primary/90">
+              {saving ? 'Création...' : 'Créer'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Create Movement Dialog */}
-      <Dialog open={showMovement} onOpenChange={setShowMovement}>
+      <Dialog open={showMovement} onOpenChange={(open) => { setShowMovement(open); if (!open) setMovementForm({ ...emptyMovementForm }); }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Nouveau Mouvement de Stock</DialogTitle>
@@ -414,8 +608,10 @@ export function StockView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMovement(false)}>Annuler</Button>
-            <Button onClick={handleCreateMovement} className="bg-primary hover:bg-primary/90">Enregistrer</Button>
+            <Button variant="outline" onClick={() => { setShowMovement(false); setMovementForm({ ...emptyMovementForm }); }}>Annuler</Button>
+            <Button onClick={handleCreateMovement} disabled={saving} className="bg-primary hover:bg-primary/90">
+              {saving ? 'Enregistrement...' : 'Enregistrer'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

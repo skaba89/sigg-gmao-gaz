@@ -14,6 +14,7 @@ import { FinancialView } from '@/components/financial-view';
 import { AIAssistantView } from '@/components/ai-assistant-view';
 import { SettingsView } from '@/components/settings-view';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect } from 'react';
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardView,
@@ -33,7 +34,7 @@ function SIGGApp() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
+      {/* Sidebar - desktop */}
       <div className="hidden lg:flex">
         <AppSidebar />
       </div>
@@ -65,14 +66,29 @@ function SIGGApp() {
 }
 
 function MobileSidebar() {
-  const { sidebarOpen, setSidebarOpen, setActiveModule, activeModule } = useAppStore();
+  const { sidebarOpen, setSidebarOpen } = useAppStore();
+
+  // Prevent body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [sidebarOpen]);
 
   if (!sidebarOpen) return null;
 
   return (
     <div className="lg:hidden fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-      <div className="absolute left-0 top-0 bottom-0 w-64">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={() => setSidebarOpen(false)}
+      />
+      <div className="absolute left-0 top-0 bottom-0 w-64 z-10">
         <AppSidebar />
       </div>
     </div>

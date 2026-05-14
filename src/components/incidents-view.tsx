@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Eye, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Eye, AlertTriangle, Play, CheckCircle, XCircle } from 'lucide-react';
 import { api, formatDate } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -56,6 +56,8 @@ export function IncidentsView() {
   const [showDetail, setShowDetail] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [rcaForm, setRcaForm] = useState({ rootCause: '', correctiveAction: '' });
   const [createForm, setCreateForm] = useState<any>({
     title: '', severity: 'MAJEURE', equipmentId: '', description: '',
   });
@@ -102,9 +104,56 @@ export function IncidentsView() {
     try {
       const detail = await api.getIncidentById(inc.id);
       setSelectedInc(detail);
+      setRcaForm({
+        rootCause: detail.rootCause || '',
+        correctiveAction: detail.correctiveAction || '',
+      });
       setShowDetail(true);
     } catch (e: any) {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!selectedInc) return;
+    setSaving(true);
+    try {
+      const updateData: any = { status: newStatus };
+      // When resolving, include RCA fields if filled
+      if (newStatus === 'RESOLU') {
+        updateData.rootCause = rcaForm.rootCause;
+        updateData.correctiveAction = rcaForm.correctiveAction;
+      }
+      const updated = await api.updateIncident(selectedInc.id, updateData);
+      toast({ title: 'Succès', description: `Statut changé en ${incStatusLabels[newStatus]}` });
+      setSelectedInc(updated);
+      setRcaForm({
+        rootCause: updated.rootCause || '',
+        correctiveAction: updated.correctiveAction || '',
+      });
+      loadData();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveRCA = async () => {
+    if (!selectedInc) return;
+    setSaving(true);
+    try {
+      const updated = await api.updateIncident(selectedInc.id, {
+        rootCause: rcaForm.rootCause,
+        correctiveAction: rcaForm.correctiveAction,
+      });
+      toast({ title: 'Succès', description: 'Analyse des causes racines sauvegardée' });
+      setSelectedInc(updated);
+      loadData();
+    } catch (e: any) {
+      toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -118,6 +167,7 @@ export function IncidentsView() {
       await api.createIncident({ ...createForm, siteId: eq?.siteId });
       toast({ title: 'Succès', description: 'Incident créé' });
       setShowCreate(false);
+      setCreateForm({ title: '', severity: 'MAJEURE', equipmentId: '', description: '' });
       loadData();
     } catch (e: any) {
       toast({ title: 'Erreur', description: e.message, variant: 'destructive' });
@@ -223,7 +273,7 @@ export function IncidentsView() {
       </Card>
 
       {/* Detail Dialog */}
-      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+      <Dialog open={showDetail} onOpenChange={(open) => { setShowDetail(open); if (!open) setSelectedInc(null); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -250,17 +300,76 @@ export function IncidentsView() {
                   <p className="text-sm mt-1 p-3 bg-muted/50 rounded-lg">{selectedInc.description}</p>
                 </div>
               )}
-              {/* Root Cause Analysis */}
+
+              {/* Status Workflow Buttons */}
+              <div className="border-t pt-4">
+                <Label className="text-xs text-muted-foreground mb-2 block">Actions</Label>
+                <div className="flex gap-2">
+                  {selectedInc.status === 'OUVERT' && (
+                    <Button
+                      onClick={() => handleStatusChange('EN_COURS')}
+                      disabled={saving}
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Play className="w-4 h-4 mr-1.5" />
+                      Prendre en charge
+                    </Button>
+                  )}
+                  {selectedInc.status === 'EN_COURS' && (
+                    <Button
+                      onClick={() => handleStatusChange('RESOLU')}
+                      disabled={saving}
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1.5" />
+                      Résoudre
+                    </Button>
+                  )}
+                  {selectedInc.status === 'RESOLU' && (
+                    <Button
+                      onClick={() => handleStatusChange('CLOTURE')}
+                      disabled={saving}
+                      size="sm"
+                      className="bg-slate-600 hover:bg-slate-700"
+                    >
+                      <XCircle className="w-4 h-4 mr-1.5" />
+                      Clôturer
+                    </Button>
+                  )}
+                  {selectedInc.status === 'CLOTURE' && (
+                    <span className="text-sm text-muted-foreground italic">Incident clôturé</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Root Cause Analysis - Editable */}
               <div className="border-t pt-4 space-y-3">
                 <h4 className="text-sm font-semibold">Analyse des Causes Racines</h4>
                 <div>
                   <Label className="text-xs text-muted-foreground">Cause racine</Label>
-                  <p className="text-sm mt-1 p-3 bg-muted/30 rounded-lg">{selectedInc.rootCause || 'Non déterminée'}</p>
+                  <Textarea
+                    value={rcaForm.rootCause}
+                    onChange={(e) => setRcaForm({...rcaForm, rootCause: e.target.value})}
+                    placeholder="Décrivez la cause racine de l'incident..."
+                    rows={3}
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Action corrective</Label>
-                  <p className="text-sm mt-1 p-3 bg-muted/30 rounded-lg">{selectedInc.correctiveAction || 'Non définie'}</p>
+                  <Textarea
+                    value={rcaForm.correctiveAction}
+                    onChange={(e) => setRcaForm({...rcaForm, correctiveAction: e.target.value})}
+                    placeholder="Décrivez l'action corrective mise en place..."
+                    rows={3}
+                    className="mt-1"
+                  />
                 </div>
+                <Button onClick={handleSaveRCA} disabled={saving} size="sm" variant="outline">
+                  {saving ? 'Sauvegarde...' : 'Sauvegarder RCA'}
+                </Button>
               </div>
             </div>
           )}
@@ -268,7 +377,7 @@ export function IncidentsView() {
       </Dialog>
 
       {/* Create Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) setCreateForm({ title: '', severity: 'MAJEURE', equipmentId: '', description: '' }); }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Signaler un Incident</DialogTitle>
@@ -304,7 +413,7 @@ export function IncidentsView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setCreateForm({ title: '', severity: 'MAJEURE', equipmentId: '', description: '' }); }}>Annuler</Button>
             <Button onClick={handleCreate} className="bg-red-600 hover:bg-red-700">Signaler</Button>
           </DialogFooter>
         </DialogContent>

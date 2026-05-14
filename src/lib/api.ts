@@ -47,6 +47,7 @@ export const api = {
   // Stock
   getParts: (params?: string) => apiFetch<any>(`/stock/parts${params ? `?${params}` : ''}`),
   createPart: (data: any) => apiFetch<any>('/stock/parts', { method: 'POST', body: JSON.stringify(data) }),
+  updatePart: (id: string, data: any) => apiFetch<any>(`/stock/parts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   getWarehouses: () => apiFetch<any>('/stock/warehouses'),
   getStockMovements: (params?: string) => apiFetch<any>(`/stock/movements${params ? `?${params}` : ''}`),
   createStockMovement: (data: any) => apiFetch<any>('/stock/movements', { method: 'POST', body: JSON.stringify(data) }),
@@ -64,6 +65,10 @@ export const api = {
 
   // Notifications
   getNotifications: () => apiFetch<any>('/notifications'),
+  markNotificationRead: (id: string) => apiFetch<any>(`/notifications/${id}`, { method: 'PUT', body: JSON.stringify({}) }),
+
+  // Audit
+  getAuditLogs: (params?: string) => apiFetch<any>(`/audit${params ? `?${params}` : ''}`),
 
   // AI
   sendAIChat: (message: string) => apiFetch<any>('/ai/chat', { method: 'POST', body: JSON.stringify({ message }) }),
