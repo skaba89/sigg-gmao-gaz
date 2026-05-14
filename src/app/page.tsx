@@ -14,8 +14,9 @@ import { FinancialView } from '@/components/financial-view';
 import { AIAssistantView } from '@/components/ai-assistant-view';
 import { FloatingChatBot } from '@/components/floating-chatbot';
 import { SettingsView } from '@/components/settings-view';
+import { LoginPage } from '@/components/login-page';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardView,
@@ -99,10 +100,47 @@ function MobileSidebar() {
   );
 }
 
+function AppRouter() {
+  const { isAuthenticated, login, logout } = useAppStore();
+  const [hydrated, setHydrated] = useState(false);
+
+  // Wait for zustand persist hydration
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[oklch(0.13_0.015_250)]">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-col items-center gap-4"
+        >
+          <div className="w-12 h-12 rounded-xl teal-gradient flex items-center justify-center">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full"
+            />
+          </div>
+          <p className="text-sm text-muted-foreground">Chargement...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={login} />;
+  }
+
+  return <SIGGApp />;
+}
+
 export default function Home() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <SIGGApp />
+      <AppRouter />
     </ThemeProvider>
   );
 }

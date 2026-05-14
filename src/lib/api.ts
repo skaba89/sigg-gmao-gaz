@@ -16,6 +16,12 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit): Prom
 }
 
 export const api = {
+  // Auth
+  login: (email: string, password: string) =>
+    apiFetch<any>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  getMe: (token: string) =>
+    apiFetch<any>('/auth/me', { headers: { Authorization: `Bearer ${token}` } }),
+
   // Dashboard
   getDashboardStats: () => apiFetch<any>('/dashboard/stats'),
   getDashboardKPI: (params?: string) => apiFetch<any>(`/dashboard/kpi${params ? `?${params}` : ''}`),

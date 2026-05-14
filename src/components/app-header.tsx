@@ -66,7 +66,7 @@ function getSearchModule(query: string): ModuleKey {
 
 export function AppHeader() {
   const { theme, setTheme } = useTheme();
-  const { activeModule, sidebarOpen, setSidebarOpen, setActiveModule, setSearchQuery } = useAppStore();
+  const { activeModule, sidebarOpen, setSidebarOpen, setActiveModule, setSearchQuery, user, logout } = useAppStore();
   const { toast } = useToast();
 
   // Search state
@@ -147,11 +147,12 @@ export function AppHeader() {
   // Logout handler
   const handleLogout = useCallback(() => {
     setLogoutOpen(false);
+    logout();
     toast({
       title: 'Déconnexion',
-      description: 'Déconnexion réussie',
+      description: 'Déconnexion réussie. À bientôt !',
     });
-  }, [toast]);
+  }, [toast, logout]);
 
   return (
     <header className="h-16 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between px-4 lg:px-6">
@@ -307,12 +308,12 @@ export function AppHeader() {
             <Button variant="ghost" className="gap-2 px-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary/15 text-primary text-xs font-semibold">
-                  AD
+                  {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'SI'}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden sm:flex flex-col items-start">
-                <span className="text-xs font-medium">Amadou Diallo</span>
-                <span className="text-[10px] text-muted-foreground">Super Admin</span>
+                <span className="text-xs font-medium">{user?.name || 'Utilisateur'}</span>
+                <span className="text-[10px] text-muted-foreground">{user?.role || 'Connecté'}</span>
               </div>
             </Button>
           </DropdownMenuTrigger>
@@ -347,27 +348,27 @@ export function AppHeader() {
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
                 <AvatarFallback className="bg-primary/15 text-primary text-lg font-semibold">
-                  AD
+                  {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'SI'}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="font-semibold text-lg">Amadou Diallo</h3>
-                <p className="text-sm text-muted-foreground">Super Admin</p>
+                <h3 className="font-semibold text-lg">{user?.name || 'Utilisateur'}</h3>
+                <p className="text-sm text-muted-foreground">{user?.role || 'Connecté'}</p>
               </div>
             </div>
             <Separator />
             <div className="grid gap-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Nom complet</span>
-                <span className="text-sm font-medium">Amadou Diallo</span>
+                <span className="text-sm font-medium">{user?.name || 'Utilisateur'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Email</span>
-                <span className="text-sm font-medium">a.diallo@sigg-gn.com</span>
+                <span className="text-sm font-medium">{user?.email || '-'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Rôle</span>
-                <Badge variant="secondary">Super Admin</Badge>
+                <Badge variant="secondary">{user?.role || '-'}</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Téléphone</span>
