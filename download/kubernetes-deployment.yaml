@@ -1,0 +1,696 @@
+# ============================================================
+# SIGG GMAO Enterprise Suite - Kubernetes Manifests
+# Societe Interprofessionnelle du Gaz de Guinee
+# ============================================================
+# Usage:
+#   kubectl apply -f kubernetes-deployment.yaml
+#   kubectl get all -l app=sigg-gmao
+#   kubectl logs -f deployment/sigg-gmao
+# ============================================================
+
+---
+# ============================================================
+# Namespace
+# ============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    environment: production
+    managed-by: kubectl
+
+---
+# ============================================================
+# ConfigMap - Configuration de l'application
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sigg-gmao-config
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+data:
+  NODE_ENV: "production"
+  NEXT_TELEMETRY_DISABLED: "1"
+  HOSTNAME: "0.0.0.0"
+  PORT: "3000"
+  POSTGRES_DB: "sigg_gmao"
+  POSTGRES_HOST: "sigg-gmao-postgres-service"
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: "sigg-gmao-redis-service"
+  REDIS_PORT: "6379"
+  STORAGE_BUCKET: "sigg-gmao"
+  STORAGE_ENDPOINT: "http://sigg-gmao-minio-service:9000"
+  # Variables non sensibles
+  APP_NAME: "SIGG GMAO Enterprise Suite"
+  APP_VERSION: "1.0.0"
+
+---
+# ============================================================
+# Secrets - Informations sensibles (TEMPLATE)
+# ⚠️ NE PAS COMMITTER LES VALEURS REELLES
+# Utiliser : kubectl create secret generic sigg-gmao-secrets ...
+# ============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sigg-gmao-secrets
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+type: Opaque
+stringData:
+  # ⚠️ REMPLACER PAR DES VALEURS REELLES EN PRODUCTION
+  DATABASE_URL: "postgresql://sigg_admin:CHANGE_ME@postgres:5432/sigg_gmao?schema=public"
+  POSTGRES_USER: "sigg_admin"
+  POSTGRES_PASSWORD: "CHANGE_ME_STRONG_PASSWORD"
+  TOKEN_SECRET: "CHANGE_ME_JWT_SECRET_MIN_32_CHARACTERS"
+  NEXTAUTH_SECRET: "CHANGE_ME_NEXTAUTH_SECRET_MIN_32_CHARS"
+  NEXTAUTH_URL: "https://gmao.sigg-gn.com"
+  REDIS_PASSWORD: "CHANGE_ME_REDIS_PASSWORD"
+  REDIS_URL: "redis://:CHANGE_ME_REDIS_PASSWORD@redis:6379/0"
+  STORAGE_ACCESS_KEY: "CHANGE_ME_MINIO_ACCESS_KEY"
+  STORAGE_SECRET_KEY: "CHANGE_ME_MINIO_SECRET_KEY"
+  AI_API_KEY: "CHANGE_ME_AI_API_KEY"
+
+---
+# ============================================================
+# PersistentVolumeClaim - Stockage PostgreSQL
+# ============================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# ============================================================
+# PersistentVolumeClaim - Stockage Redis
+# ============================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# ============================================================
+# PersistentVolumeClaim - Stockage MinIO
+# ============================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: minio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# ============================================================
+# Deployment - Application Next.js
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sigg-gmao
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: app
+    version: "1.0.0"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sigg-gmao
+      component: app
+  template:
+    metadata:
+      labels:
+        app: sigg-gmao
+        component: app
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/api/metrics"
+    spec:
+      # Security context - Pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Init container - database migration
+      initContainers:
+        - name: db-migrate
+          image: ghcr.io/sigg-gn/gmao-platform:latest
+          command: ["npx", "prisma", "db", "push"]
+          envFrom:
+            - configMapRef:
+                name: sigg-gmao-config
+            - secretRef:
+                name: sigg-gmao-secrets
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+
+      containers:
+        - name: app
+          image: ghcr.io/sigg-gn/gmao-platform:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sigg-gmao-config
+            - secretRef:
+                name: sigg-gmao-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sigg-gmao-secrets
+                  key: DATABASE_URL
+          resources:
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+          # Security context - Container level
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          # Liveness probe
+          livenessProbe:
+            httpGet:
+              path: /api
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /api
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Startup probe
+          startupProbe:
+            httpGet:
+              path: /api
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+
+      # Topology spread constraints for high availability
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: sigg-gmao
+              component: app
+
+      # Anti-affinity for pod distribution
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - sigg-gmao
+                topologyKey: kubernetes.io/hostname
+
+---
+# ============================================================
+# Deployment - PostgreSQL
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sigg-gmao-postgres
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sigg-gmao
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: sigg-gmao
+        component: postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sigg-gmao-config
+            - secretRef:
+                name: sigg-gmao-secrets
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sigg-gmao-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sigg-gmao-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: sigg-gmao-config
+                  key: POSTGRES_DB
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - sigg_admin
+                - -d
+                - sigg_gmao
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - sigg_admin
+                - -d
+                - sigg_gmao
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+# ============================================================
+# Deployment - Redis
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sigg-gmao-redis
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: redis
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sigg-gmao
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: sigg-gmao
+        component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --maxmemory
+            - "512mb"
+            - --maxmemory-policy
+            - allkeys-lru
+            - --appendonly
+            - "yes"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sigg-gmao-secrets
+                  key: REDIS_PASSWORD
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+
+---
+# ============================================================
+# Service - Application Next.js
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: sigg-gmao-service
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: app
+spec:
+  type: ClusterIP
+  selector:
+    app: sigg-gmao
+    component: app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
+---
+# ============================================================
+# Service - PostgreSQL
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: sigg-gmao-postgres-service
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: sigg-gmao
+    component: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+
+---
+# ============================================================
+# Service - Redis
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: sigg-gmao-redis-service
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+    component: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: sigg-gmao
+    component: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+
+---
+# ============================================================
+# Ingress - Routeur d'entree
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sigg-gmao-ingress
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+  annotations:
+    # NGINX Ingress Controller
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;";
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+spec:
+  tls:
+    - hosts:
+        - gmao.sigg-gn.com
+      secretName: sigg-gmao-tls
+  rules:
+    - host: gmao.sigg-gn.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sigg-gmao-service
+                port:
+                  number: 80
+
+---
+# ============================================================
+# HorizontalPodAutoscaler - Mise a l'echelle automatique
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sigg-gmao-hpa
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sigg-gmao
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 120
+
+---
+# ============================================================
+# PodDisruptionBudget - Disponibilite pendant les maintenances
+# ============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sigg-gmao-pdb
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: sigg-gmao
+      component: app
+
+---
+# ============================================================
+# NetworkPolicy - Segmentation reseau
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sigg-gmao-network-policy
+  namespace: sigg-gmao-prod
+  labels:
+    app: sigg-gmao
+spec:
+  podSelector:
+    matchLabels:
+      app: sigg-gmao
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Autoriser le trafic depuis l'Ingress
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - port: 3000
+          protocol: TCP
+    # Autoriser la communication interne entre pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sigg-gmao
+  egress:
+    # Autoriser le DNS
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Autoriser la communication interne
+    - to:
+        - podSelector:
+            matchLabels:
+              app: sigg-gmao
+    # Autoriser les sorties HTTPS
+    - to: []
+      ports:
+        - port: 443
+          protocol: TCP

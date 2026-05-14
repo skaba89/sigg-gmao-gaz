@@ -1,0 +1,672 @@
+// ============================================================
+// SIGG Smart Maintenance Platform - Database Schema
+// Société Interprofessionnelle du Gaz de Guinée (GMAO)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 1. USER & AUTHENTICATION
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  password      String
+  role          String    @default("TECHNICIEN") // SUPER_ADMIN, DIRECTION_GENERALE, RESP_MAINTENANCE, RESP_STOCK, TECHNICIEN, AUDITEUR, FINANCE, PRESTATAIRE
+  avatar        String?
+  phone         String?
+  department    String?
+  siteId        String?
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  site                  Site?                    @relation(fields: [siteId], references: [id])
+  auditLogs             AuditLog[]
+  assignedWorkOrders    WorkOrder[]              @relation("AssignedTechnician")
+  requestedWorkOrders   WorkOrder[]              @relation("Requester")
+  supervisedWorkOrders  WorkOrder[]              @relation("Supervisor")
+  checklistCompletions  WorkOrderChecklist[]
+  comments              WorkOrderComment[]
+  reportedIncidents     Incident[]               @relation("IncidentReporter")
+  managedWarehouse      Warehouse?
+  stockMovements        StockMovement[]
+  requestedPurchases    PurchaseOrder[]          @relation("PurchaseRequester")
+  approvedPurchases     PurchaseOrder[]          @relation("PurchaseApprover")
+  notifications         Notification[]
+
+  @@index([role])
+  @@index([siteId])
+  @@index([isActive])
+  @@map("users")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// 2. SITE & LOCATION MANAGEMENT
+// ============================================================
+
+model Site {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  address   String?
+  city      String?
+  country   String   @default("Guinée")
+  latitude  Float?
+  longitude Float?
+  type      String   @default("DISTRIBUTION") // CENTRAL, DISTRIBUTION, PRODUCTION, STOCKAGE
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users              User[]
+  buildings          Building[]
+  equipment          Equipment[]
+  workOrders         WorkOrder[]
+  incidents          Incident[]
+  warehouses         Warehouse[]
+  costCenters        CostCenter[]
+  maintenanceCosts   MaintenanceCost[]
+  kpiRecords         KPIRecord[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("sites")
+}
+
+model Building {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  siteId      String
+  floor       Int?
+  description String?
+  createdAt   DateTime @default(now())
+
+  site   Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  zones  Zone[]
+
+  @@unique([code, siteId])
+  @@index([siteId])
+  @@map("buildings")
+}
+
+model Zone {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  buildingId  String
+  type        String?
+  description String?
+
+  building   Building    @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  equipment  Equipment[]
+
+  @@unique([code, buildingId])
+  @@index([buildingId])
+  @@map("zones")
+}
+
+// ============================================================
+// 3. EQUIPMENT MANAGEMENT
+// ============================================================
+
+model EquipmentCategory {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  icon        String?
+
+  equipment Equipment[]
+
+  @@map("equipment_categories")
+}
+
+model Equipment {
+  id                 String   @id @default(cuid())
+  name               String
+  code               String   @unique
+  serialNumber       String?
+  categoryId         String
+  siteId             String
+  zoneId             String?
+  manufacturer       String?
+  model              String?
+  year               Int?
+  criticality        String   @default("MOYENNE") // CRITIQUE, IMPORTANTE, MOYENNE, FAIBLE
+  status             String   @default("OPERATIONNEL") // OPERATIONNEL, HORS_SERVICE, EN_MAINTENANCE, EN_PANNE, MIS_AU_REBUT
+  purchaseDate       DateTime?
+  installationDate   DateTime?
+  warrantyEnd        DateTime?
+  expectedLifespan   Int?     // in months
+  currentHealthScore Int      @default(100) // 0-100
+  qrCode             String?
+  description        String?
+  imageUrl           String?
+  latitude           Float?
+  longitude          Float?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  category        EquipmentCategory    @relation(fields: [categoryId], references: [id])
+  site            Site                 @relation(fields: [siteId], references: [id])
+  zone            Zone?                @relation(fields: [zoneId], references: [id])
+  documents       EquipmentDocument[]
+  parameters      EquipmentParameter[]
+  workOrders      WorkOrder[]
+  incidents       Incident[]
+  maintenancePlans MaintenancePlan[]
+  maintenanceCosts MaintenanceCost[]
+
+  @@index([categoryId])
+  @@index([siteId])
+  @@index([zoneId])
+  @@index([criticality])
+  @@index([status])
+  @@map("equipment")
+}
+
+model EquipmentDocument {
+  id          String   @id @default(cuid())
+  equipmentId String
+  name        String
+  type        String?  // MANUAL, SCHEMA, CERTIFICAT, AUTRE
+  url         String
+  size        Int?
+  uploadedAt  DateTime @default(now())
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId])
+  @@map("equipment_documents")
+}
+
+model EquipmentParameter {
+  id            String  @id @default(cuid())
+  equipmentId   String
+  name          String
+  value         String
+  unit          String?
+  minThreshold  String?
+  maxThreshold  String?
+  lastChecked   DateTime?
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId])
+  @@map("equipment_parameters")
+}
+
+// ============================================================
+// 4. WORK ORDERS / INTERVENTIONS
+// ============================================================
+
+model WorkOrder {
+  id               String    @id @default(cuid())
+  code             String    @unique
+  title            String
+  description      String?
+  type             String    @default("CORRECTIVE") // PREVENTIVE, CORRECTIVE, AMELIORATIVE, URGENTE
+  status           String    @default("EN_ATTENTE") // EN_ATTENTE, PLANIFIEE, EN_COURS, SUSPENDUE, TERMINEE, VALIDEE, CRITIQUE
+  priority         String    @default("P3_MOYENNE") // P1_CRITIQUE, P2_HAUTE, P3_MOYENNE, P4_BASSE
+  equipmentId      String
+  siteId           String
+  assignedToId     String?
+  requestedById    String?
+  supervisorId     String?
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+  estimatedHours   Float?
+  actualHours      Float?
+  notes            String?
+  signatureUrl     String?
+  reportPdfUrl     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  equipment    Equipment           @relation(fields: [equipmentId], references: [id])
+  site         Site                @relation(fields: [siteId], references: [id])
+  assignedTo   User?               @relation("AssignedTechnician", fields: [assignedToId], references: [id])
+  requestedBy  User?               @relation("Requester", fields: [requestedById], references: [id])
+  supervisor   User?               @relation("Supervisor", fields: [supervisorId], references: [id])
+  parts        WorkOrderPart[]
+  checklists   WorkOrderChecklist[]
+  comments     WorkOrderComment[]
+  stockMovements StockMovement[]
+  maintenanceCosts MaintenanceCost[]
+  incidents    Incident[]
+
+  @@index([equipmentId])
+  @@index([siteId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([type])
+  @@index([plannedStartDate])
+  @@map("work_orders")
+}
+
+model WorkOrderPart {
+  id           String  @id @default(cuid())
+  workOrderId  String
+  partId       String
+  quantity     Int
+  unitPrice    Float?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  part      Part      @relation(fields: [partId], references: [id])
+
+  @@index([workOrderId])
+  @@index([partId])
+  @@map("work_order_parts")
+}
+
+model WorkOrderChecklist {
+  id            String    @id @default(cuid())
+  workOrderId   String
+  item          String
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  completedById String?
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  completedBy User?     @relation(fields: [completedById], references: [id])
+
+  @@index([workOrderId])
+  @@map("work_order_checklists")
+}
+
+model WorkOrderComment {
+  id           String   @id @default(cuid())
+  workOrderId  String
+  userId       String
+  content      String
+  createdAt    DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("work_order_comments")
+}
+
+// ============================================================
+// 5. PREVENTIVE MAINTENANCE
+// ============================================================
+
+model MaintenancePlan {
+  id               String   @id @default(cuid())
+  name             String
+  code             String   @unique
+  equipmentId      String
+  type             String   @default("PERIODIQUE") // PERIODIQUE, CONDITIONNELLE, PREDICTIVE
+  frequency        String   @default("MOIS") // JOUR, SEMAINE, MOIS, TRIMESTRE, SEMESTRE, ANNUEL
+  frequencyValue   Int      @default(1)
+  nextDueDate      DateTime
+  isActive         Boolean  @default(true)
+  description      String?
+  estimatedDuration Int?    // in minutes
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  equipment Equipment           @relation(fields: [equipmentId], references: [id])
+  tasks     MaintenancePlanTask[]
+
+  @@index([equipmentId])
+  @@index([nextDueDate])
+  @@index([isActive])
+  @@map("maintenance_plans")
+}
+
+model MaintenancePlanTask {
+  id              String  @id @default(cuid())
+  planId          String
+  description     String
+  order           Int     @default(0)
+  isRequired      Boolean @default(true)
+  estimatedMinutes Int?
+
+  plan MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("maintenance_plan_tasks")
+}
+
+// ============================================================
+// 6. INCIDENT / CORRECTIVE MAINTENANCE
+// ============================================================
+
+model Incident {
+  id               String    @id @default(cuid())
+  code             String    @unique
+  title            String
+  description      String?
+  equipmentId      String
+  siteId           String
+  reportedById     String
+  severity         String    @default("MAJEURE") // MINEURE, MAJEURE, CRITIQUE
+  status           String    @default("OUVERT") // OUVERT, EN_COURS, RESOLU, CLOTURE
+  detectedAt       DateTime  @default(now())
+  resolvedAt       DateTime?
+  rootCause        String?
+  correctiveAction String?
+  workOrderId      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  equipment  Equipment  @relation(fields: [equipmentId], references: [id])
+  site       Site       @relation(fields: [siteId], references: [id])
+  reportedBy User       @relation("IncidentReporter", fields: [reportedById], references: [id])
+  workOrder  WorkOrder? @relation(fields: [workOrderId], references: [id])
+
+  @@index([equipmentId])
+  @@index([siteId])
+  @@index([reportedById])
+  @@index([severity])
+  @@index([status])
+  @@index([detectedAt])
+  @@map("incidents")
+}
+
+// ============================================================
+// 7. STOCK MANAGEMENT
+// ============================================================
+
+model Warehouse {
+  id        String  @id @default(cuid())
+  name      String
+  code      String  @unique
+  siteId    String
+  type      String  @default("SECONDAIRE") // CENTRAL, SECONDAIRE, MOBILE
+  address   String?
+  managerId String?  @unique
+  isActive  Boolean  @default(true)
+
+  site     Site             @relation(fields: [siteId], references: [id])
+  manager  User?            @relation(fields: [managerId], references: [id])
+  stocks   WarehouseStock[]
+  movements StockMovement[]
+
+  @@index([siteId])
+  @@index([isActive])
+  @@map("warehouses")
+}
+
+model PartCategory {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  description String?
+
+  parts Part[]
+
+  @@map("part_categories")
+}
+
+model Part {
+  id             String   @id @default(cuid())
+  name           String
+  code           String   @unique
+  description    String?
+  categoryId     String
+  manufacturer   String?
+  partNumber     String?
+  unit           String   @default("unite")
+  unitPrice      Float    @default(0)
+  minStockLevel  Int      @default(0)
+  maxStockLevel  Int?
+  currentStock   Int      @default(0)
+  reorderPoint   Int?
+  leadTimeDays   Int?
+  imageUrl       String?
+  specifications String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  category       PartCategory      @relation(fields: [categoryId], references: [id])
+  warehouseStock WarehouseStock[]
+  workOrderParts WorkOrderPart[]
+  movements      StockMovement[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([code])
+  @@map("parts")
+}
+
+model WarehouseStock {
+  id          String  @id @default(cuid())
+  warehouseId String
+  partId      String
+  quantity    Int     @default(0)
+  minLevel    Int?
+  maxLevel    Int?
+  location    String? // bin/shelf location within warehouse
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  part      Part      @relation(fields: [partId], references: [id])
+
+  @@unique([warehouseId, partId])
+  @@index([warehouseId])
+  @@index([partId])
+  @@map("warehouse_stocks")
+}
+
+model StockMovement {
+  id            String   @id @default(cuid())
+  partId        String
+  warehouseId   String
+  type          String   // ENTREE, SORTIE, TRANSFERT, AJUSTEMENT, RETOUR
+  quantity      Int
+  reference     String?
+  workOrderId   String?
+  performedById String
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  part        Part       @relation(fields: [partId], references: [id])
+  warehouse   Warehouse  @relation(fields: [warehouseId], references: [id])
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  performedBy User       @relation(fields: [performedById], references: [id])
+
+  @@index([partId])
+  @@index([warehouseId])
+  @@index([type])
+  @@index([workOrderId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+model Supplier {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  country     String  @default("Guinée")
+  isActive    Boolean @default(true)
+  rating      Int?    // 1-5
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id                   String    @id @default(cuid())
+  code                 String    @unique
+  supplierId           String
+  status               String    @default("BROUILLON") // BROUILLON, SOUMISE, APPROUVEE, EN_COURS, LIVREE, ANNULEE
+  totalAmount          Float     @default(0)
+  currency             String    @default("GNF")
+  requestedById        String
+  approvedById         String?
+  orderDate            DateTime  @default(now())
+  expectedDeliveryDate DateTime?
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+  requestedBy  User                @relation("PurchaseRequester", fields: [requestedById], references: [id])
+  approvedBy   User?               @relation("PurchaseApprover", fields: [approvedById], references: [id])
+  items        PurchaseOrderItem[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([requestedById])
+  @@index([approvedById])
+  @@index([orderDate])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  partId          String
+  quantity        Int
+  unitPrice       Float
+  totalPrice      Float
+  receivedQuantity Int     @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  part          Part          @relation(fields: [partId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([partId])
+  @@map("purchase_order_items")
+}
+
+// ============================================================
+// 8. FINANCIAL / COST TRACKING
+// ============================================================
+
+model CostCenter {
+  id       String  @id @default(cuid())
+  name     String
+  code     String  @unique
+  siteId   String
+  budget   Float   @default(0)
+  spent    Float   @default(0)
+  remaining Float  @default(0)
+  period   String? // e.g., "2024-Q1", "2024"
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@index([siteId])
+  @@index([period])
+  @@map("cost_centers")
+}
+
+model MaintenanceCost {
+  id           String   @id @default(cuid())
+  workOrderId  String?
+  equipmentId  String?
+  siteId       String
+  type         String   // MAIN_DOEUVRE, PIECES, OUTILLAGE, SOUS_TRAITANCE, AUTRE
+  amount       Float
+  currency     String   @default("GNF")
+  date         DateTime @default(now())
+  description  String?
+  createdAt    DateTime @default(now())
+
+  workOrder  WorkOrder?  @relation(fields: [workOrderId], references: [id])
+  equipment  Equipment?  @relation(fields: [equipmentId], references: [id])
+  site       Site        @relation(fields: [siteId], references: [id])
+
+  @@index([workOrderId])
+  @@index([equipmentId])
+  @@index([siteId])
+  @@index([type])
+  @@index([date])
+  @@map("maintenance_costs")
+}
+
+// ============================================================
+// 9. NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id             String   @id @default(cuid())
+  userId         String
+  type           String   @default("IN_APP") // EMAIL, SMS, PUSH, IN_APP
+  title          String
+  message        String
+  isRead         Boolean  @default(false)
+  relatedEntity  String?
+  relatedEntityId String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// 10. KPI METRICS
+// ============================================================
+
+model KPIRecord {
+  id         String   @id @default(cuid())
+  siteId     String?
+  metric     String   // MTTR, MTBF, DISPONIBILITE, TAUX_PANNE, TAUX_CONFORMITE, COUT_MOYEN_PANNE, COUT_GLOBAL_MAINT
+  value      Float
+  unit       String?
+  period     String   // e.g., "2024-01", "2024-Q1"
+  recordedAt DateTime @default(now())
+
+  site Site? @relation(fields: [siteId], references: [id])
+
+  @@index([siteId])
+  @@index([metric])
+  @@index([period])
+  @@index([recordedAt])
+  @@map("kpi_records")
+}

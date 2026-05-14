@@ -1,0 +1,341 @@
+# ============================================================
+# SIGG GMAO Enterprise Suite - CI/CD Pipeline
+# Societe Interprofessionnelle du Gaz de Guinee
+# ============================================================
+# GitHub Actions Workflow:
+#   - Lint & Type Check
+#   - Test
+#   - Build
+#   - Docker Build & Push
+#   - Deploy to Staging / Production
+# ============================================================
+
+name: SIGG GMAO CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: "20"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================
+  # Job 1: Lint & Type Check
+  # ============================================================
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+  # ============================================================
+  # Job 2: Test
+  # ============================================================
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sigg_gmao_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Setup test database
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/sigg_gmao_test?schema=public
+        run: npx prisma db push
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/sigg_gmao_test?schema=public
+          TOKEN_SECRET: test-secret-key-for-ci-pipeline-32ch
+          NODE_ENV: test
+        run: npm test --if-present
+
+  # ============================================================
+  # Job 3: Build
+  # ============================================================
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Build Next.js application
+        env:
+          DATABASE_URL: file:./build.db
+          TOKEN_SECRET: build-secret-key-for-ci-pipeline-32c
+          NEXTAUTH_SECRET: build-nextauth-secret-for-ci-32ch
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: |
+            .next/standalone
+            .next/static
+            public
+          retention-days: 7
+
+  # ============================================================
+  # Job 4: Docker Build & Push
+  # ============================================================
+  docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./download/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+
+      - name: Security scan with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ============================================================
+  # Job 5: Deploy to Staging
+  # ============================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging.sigg-gmao.gn
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Deploy to staging namespace
+        run: |
+          kubectl set image deployment/sigg-gmao \
+            app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n sigg-gmao-staging
+          kubectl rollout status deployment/sigg-gmao \
+            -n sigg-gmao-staging --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n sigg-gmao-staging
+          kubectl get services -n sigg-gmao-staging
+
+      - name: Run smoke tests
+        run: |
+          STAGING_URL="https://staging.sigg-gmao.gn"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${STAGING_URL}/api" || echo "000")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Smoke test failed! HTTP status: ${HTTP_STATUS}"
+            exit 1
+          fi
+          echo "Smoke test passed!"
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Staging deployment ${{ job.status }} for commit ${{ github.sha }}"
+
+  # ============================================================
+  # Job 6: Deploy to Production
+  # ============================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://gmao.sigg-gn.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create production backup
+        run: |
+          kubectl exec -n sigg-gmao-prod deployment/sigg-gmao-postgres -- \
+            pg_dump -U sigg_admin sigg_gmao > backup_$(date +%Y%m%d_%H%M%S).sql
+
+      - name: Deploy to production namespace
+        run: |
+          kubectl set image deployment/sigg-gmao \
+            app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n sigg-gmao-prod
+          kubectl rollout status deployment/sigg-gmao \
+            -n sigg-gmao-prod --timeout=600s
+
+      - name: Verify production deployment
+        run: |
+          kubectl get pods -n sigg-gmao-prod
+          kubectl get services -n sigg-gmao-prod
+          kubectl get ingress -n sigg-gmao-prod
+
+      - name: Run production health check
+        run: |
+          PROD_URL="https://gmao.sigg-gn.com"
+          for i in {1..5}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PROD_URL}/api" || echo "000")
+            if [ "$HTTP_STATUS" == "200" ]; then
+              echo "Health check passed (attempt $i)!"
+              exit 0
+            fi
+            echo "Health check attempt $i failed (HTTP $HTTP_STATUS). Retrying..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts!"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          kubectl rollout undo deployment/sigg-gmao -n sigg-gmao-prod
+          echo "Rolled back to previous deployment"
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Production deployment ${{ job.status }} for commit ${{ github.sha }}"
