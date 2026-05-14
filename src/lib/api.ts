@@ -83,6 +83,13 @@ export const api = {
       body: JSON.stringify({ message, history, context }),
     }),
 
+  // File Generation
+  generateFile: (data: any, format: string, fileName: string) =>
+    apiFetch<any>('/ai/generate-file', {
+      method: 'POST',
+      body: JSON.stringify({ data, format, fileName }),
+    }),
+
   // Seed
   seedDatabase: () => apiFetch<any>('/seed'),
 };

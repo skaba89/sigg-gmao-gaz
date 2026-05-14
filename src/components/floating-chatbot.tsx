@@ -29,6 +29,14 @@ import {
   FileSpreadsheet,
   Cpu,
   Shield,
+  FileDown,
+  File,
+  Table2,
+  FileCode,
+  FileArchive,
+  Copy,
+  Check,
+  MoreHorizontal,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAppStore, type ModuleKey } from '@/store/app-store';
@@ -43,15 +51,33 @@ interface Message {
   files?: GeneratedFile[];
 }
 
+type FileType = 'csv' | 'json' | 'txt' | 'xml' | 'html' | 'sql' | 'md' | 'yaml' | 'xlsx' | 'pdf' | 'tsv';
+
 interface GeneratedFile {
   name: string;
   content: string;
-  type: 'csv' | 'json' | 'txt';
+  type: FileType;
 }
 
 // ─── Chatbot Identity ──────────────────────────────────────────
 const CHATBOT_NAME = 'MANTIS';
 const CHATBOT_FULL_NAME = 'Maintenance Analysis & Technical Intelligence System';
+const CHATBOT_VERSION = 'v2.0';
+
+// ─── Supported file formats ────────────────────────────────────
+const FILE_FORMATS: Record<FileType, { label: string; icon: React.ElementType; color: string; mimeType: string; ext: string }> = {
+  csv:   { label: 'CSV',    icon: FileSpreadsheet, color: '#16A34A', mimeType: 'text/csv;charset=utf-8;',            ext: 'csv' },
+  xlsx:  { label: 'Excel',  icon: FileSpreadsheet, color: '#0D7C3E', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx' },
+  pdf:   { label: 'PDF',    icon: FileText,        color: '#DC2626', mimeType: 'application/pdf',                     ext: 'pdf' },
+  json:  { label: 'JSON',   icon: FileCode,        color: '#3B82F6', mimeType: 'application/json;charset=utf-8;',   ext: 'json' },
+  xml:   { label: 'XML',    icon: FileCode,        color: '#8B5CF6', mimeType: 'application/xml;charset=utf-8;',    ext: 'xml' },
+  html:  { label: 'HTML',   icon: FileCode,        color: '#F97316', mimeType: 'text/html;charset=utf-8;',           ext: 'html' },
+  sql:   { label: 'SQL',    icon: FileCode,        color: '#06B6D4', mimeType: 'text/plain;charset=utf-8;',          ext: 'sql' },
+  md:    { label: 'Markdown', icon: FileText,      color: '#6366F1', mimeType: 'text/markdown;charset=utf-8;',       ext: 'md' },
+  yaml:  { label: 'YAML',   icon: FileCode,        color: '#EC4899', mimeType: 'text/yaml;charset=utf-8;',           ext: 'yaml' },
+  txt:   { label: 'TXT',    icon: FileText,        color: '#6B7280', mimeType: 'text/plain;charset=utf-8;',          ext: 'txt' },
+  tsv:   { label: 'TSV',    icon: FileSpreadsheet, color: '#14B8A6', mimeType: 'text/tab-separated-values;charset=utf-8;', ext: 'tsv' },
+};
 
 // ─── Module-aware prompts ──────────────────────────────────────
 const modulePrompts: Record<ModuleKey, { icon: React.ElementType; prompts: string[] }> = {
@@ -59,72 +85,72 @@ const modulePrompts: Record<ModuleKey, { icon: React.ElementType; prompts: strin
     icon: LayoutDashboard,
     prompts: [
       "Génère un rapport KPI en CSV",
-      "Analyse la tendance des incidents",
-      "Tableau de bord exécutif résumé",
+      "Rapport exécutif PDF avec tableaux",
+      "Export dashboard en Excel",
     ],
   },
   equipment: {
     icon: Server,
     prompts: [
-      "Tableau des équipements critiques",
-      "Génère CSV état des équipements",
+      "Tableau des équipements critiques en Excel",
+      "Rapport PDF état des équipements",
       "Diagnostic compresseur GA90+",
     ],
   },
   'work-orders': {
     icon: Wrench,
     prompts: [
-      "Rapport OT en retard en CSV",
-      "Aide-moi à rédiger un OT",
-      "Tableau priorisation des OT",
+      "Export OT en retard en CSV",
+      "Rapport ordres de travail en PDF",
+      "Tableau priorisation des OT en Excel",
     ],
   },
   incidents: {
     icon: AlertTriangle,
     prompts: [
-      "Rapport incidents en CSV",
-      "Analyse causes racines",
-      "Procédure déclaration incident",
+      "Rapport incidents en PDF",
+      "Export CSV des incidents",
+      "Analyse causes racines avec tableau",
     ],
   },
   maintenance: {
     icon: CalendarClock,
     prompts: [
-      "Planning maintenance en CSV",
-      "Recommandations préventives",
-      "Optimisation planning semaine",
+      "Planning maintenance en Excel",
+      "Rapport préventif en PDF",
+      "Export planning en CSV",
     ],
   },
   stock: {
     icon: Package,
     prompts: [
-      "Rapport stock critique en CSV",
-      "Réapprovisionnement recommandé",
-      "Tableau mouvements de stock",
+      "Rapport stock critique en Excel",
+      "État des stocks en PDF",
+      "Export mouvements en CSV",
     ],
   },
   financial: {
     icon: DollarSign,
     prompts: [
-      "Rapport coûts maintenance CSV",
-      "Prévisions budgétaires",
-      "Tableau répartition des dépenses",
+      "Rapport coûts maintenance en PDF",
+      "Tableau dépenses en Excel",
+      "Prévisions budgétaires CSV",
     ],
   },
   'ai-assistant': {
     icon: Bot,
     prompts: [
-      "Génère un rapport complet en CSV",
-      "Analyse prédictive équipements",
-      "Bonnes pratiques industrielles gaz",
+      "Rapport complet multi-format",
+      "Génère fichier SQL des équipements",
+      "Export XML des données maintenance",
     ],
   },
   settings: {
     icon: Settings,
     prompts: [
-      "Guide configuration alertes",
-      "Gestion des utilisateurs",
-      "Paramètres sécurité recommandés",
+      "Guide configuration alertes en PDF",
+      "Export config en YAML",
+      "Documentation technique en Markdown",
     ],
   },
 };
@@ -142,95 +168,286 @@ const moduleLabels: Record<ModuleKey, string> = {
 };
 
 const moduleWelcomeMessages: Record<ModuleKey, string> = {
-  dashboard: `Bonjour ! Je suis **MANTIS**, votre assistant maintenance autonome. Sur le Tableau de bord, je peux analyser les KPIs, générer des rapports CSV et vous alerter sur les tendances critiques. Que puis-je faire pour vous ?`,
-  equipment: `Module Équipements activé. Je peux générer des **tableaux d'état**, des **rapports CSV** d'équipements, et diagnostiquer des pannes. Demandez-moi un rapport !`,
-  'work-orders': `Section Ordres de travail. Je peux rédiger des OT, générer des **rapports de retard en CSV**, et prioriser vos interventions. Votre besoin ?`,
-  incidents: `Module Incidents. Je peux créer des **rapports d'incidents téléchargeables**, analyser les causes racines et vous guider dans les procédures. Comment aider ?`,
-  maintenance: `Plans de maintenance. Je peux générer des **plannings en CSV**, recommander des actions préventives et optimiser vos interventions. Par quoi commencer ?`,
-  stock: `Gestion du stock. Je peux produire des **rapports de stock critique en CSV**, recommander des réapprovisionnements et analyser les mouvements. Votre besoin ?`,
-  financial: `Volet financier. Je peux générer des **rapports de coûts en CSV**, établir des prévisions et optimiser les dépenses. Quel rapport souhaitez-vous ?`,
-  'ai-assistant': `Bienvenue dans l'espace MANTIS complet. Je peux générer des **fichiers téléchargeables** (CSV, rapports), créer des **tableaux de données** et répondre à toutes vos questions maintenance.`,
-  settings: `Paramètres de la plateforme. Je peux vous guider dans la configuration, la gestion des utilisateurs et les options de sécurité.`,
+  dashboard: `Bonjour ! Je suis **MANTIS**, votre assistant maintenance autonome. Sur le Tableau de bord, je peux analyser les KPIs et générer des rapports en **CSV, Excel, PDF, JSON, XML** et plus encore. Que puis-je faire pour vous ?`,
+  equipment: `Module Équipements activé. Je peux créer des **tableaux interactifs**, des rapports en **Excel/PDF/CSV**, et diagnostiquer des pannes. Demandez-moi un rapport !`,
+  'work-orders': `Section Ordres de travail. Je peux rédiger des OT, générer des **rapports multi-format** (PDF, Excel, CSV, HTML), et prioriser vos interventions.`,
+  incidents: `Module Incidents. Je peux créer des **rapports téléchargeables** en PDF, Excel, CSV, XML, SQL et vous guider dans les procédures. Comment aider ?`,
+  maintenance: `Plans de maintenance. Je peux générer des **plannings en Excel/CSV/PDF**, recommander des actions préventives et optimiser vos interventions.`,
+  stock: `Gestion du stock. Je peux produire des **rapports multi-format** (Excel, PDF, CSV, JSON, XML), recommander des réapprovisionnements et analyser les mouvements.`,
+  financial: `Volet financier. Je peux générer des **rapports de coûts en PDF/Excel/CSV**, établir des prévisions et optimiser les dépenses. Quel format préférez-vous ?`,
+  'ai-assistant': `Bienvenue dans l'espace MANTIS complet. Je génère des fichiers en **11 formats** : CSV, Excel (XLSX), PDF, JSON, XML, HTML, SQL, Markdown, YAML, TXT, TSV. Je crée aussi des **tableaux de données** structurés.`,
+  settings: `Paramètres de la plateforme. Je peux générer des documentations en **Markdown/PDF**, des configurations en **YAML/JSON/XML**, et vous guider dans les réglages.`,
 };
 
 // ─── Utility: Extract downloadable files from AI response ──────
 function extractFilesFromContent(content: string): { cleanContent: string; files: GeneratedFile[] } {
   const files: GeneratedFile[] = [];
-  const codeBlockRegex = /```(csv|json|txt)\n([\s\S]*?)```/gi;
+  // Match code blocks with format identifiers
+  const codeBlockRegex = /```(csv|json|txt|xml|html|sql|md|markdown|yaml|yml|tsv)\n([\s\S]*?)```/gi;
   let match;
   let cleanContent = content;
 
   while ((match = codeBlockRegex.exec(content)) !== null) {
-    const fileType = match[1].toLowerCase() as 'csv' | 'json' | 'txt';
+    const rawType = match[1].toLowerCase();
+    // Normalize markdown/yml
+    const fileType: FileType = rawType === 'markdown' ? 'md' : rawType === 'yml' ? 'yaml' : rawType as FileType;
     const fileContent = match[2].trim();
 
     // Extract filename from <!-- FILE: name --> comment or generate one
     const fileMatch = fileContent.match(/<!--\s*FILE:\s*(.+?)\s*-->/i);
     const fileName = fileMatch
       ? fileMatch[1].trim()
-      : `rapport_sigg_${new Date().toISOString().slice(0, 10)}.${fileType}`;
+      : `rapport_sigg_${new Date().toISOString().slice(0, 10)}.${FILE_FORMATS[fileType]?.ext || fileType}`;
 
     const cleanFileContent = fileContent.replace(/<!--\s*FILE:\s*.+?\s*-->\n?/i, '');
 
-    files.push({ name: fileName, content: cleanFileContent, type: fileType });
+    if (FILE_FORMATS[fileType]) {
+      files.push({ name: fileName, content: cleanFileContent, type: fileType });
+    }
+  }
+
+  // Also check for explicit file markers without code blocks
+  const fileMarkerRegex = /<!--\s*FILE:\s*(.+?)\s*-->\n([\s\S]*?)(?=<!--\s*FILE:|$)/gi;
+  while ((match = fileMarkerRegex.exec(content)) !== null) {
+    const fileName = match[1].trim();
+    const ext = fileName.split('.').pop()?.toLowerCase() as FileType;
+    if (ext && FILE_FORMATS[ext] && !files.find(f => f.name === fileName)) {
+      files.push({ name: fileName, content: match[2].trim(), type: ext });
+    }
   }
 
   return { cleanContent, files };
 }
 
+// ─── Utility: Generate XLSX from CSV data ─────────────────────
+async function generateXLSX(csvContent: string, fileName: string): Promise<void> {
+  const XLSX = await import('xlsx');
+  // Parse CSV (semicolon or comma separated)
+  const lines = csvContent.split('\n').filter(l => l.trim());
+  const separator = lines[0]?.includes(';') ? ';' : ',';
+  const data = lines.map(line => line.split(separator).map(cell => cell.trim().replace(/^"|"$/g, '')));
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  // Auto-size columns
+  const colWidths = data[0]?.map((_, colIdx) => {
+    const maxLen = Math.max(...data.map(row => (row[colIdx] || '').toString().length));
+    return { wch: Math.min(maxLen + 2, 40) };
+  }) || [];
+  ws['!cols'] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Données');
+  XLSX.writeFile(wb, fileName.replace(/\.csv$/i, '.xlsx'));
+}
+
+// ─── Utility: Generate PDF from text/table data ───────────────
+async function generatePDF(content: string, fileName: string, title?: string): Promise<void> {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  // Title
+  const reportTitle = title || fileName.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
+  doc.setFontSize(16);
+  doc.setTextColor(15, 118, 110);
+  doc.text(`SIGG GMAO - ${reportTitle}`, 14, 15);
+
+  // Date
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Généré par MANTIS le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, 21);
+
+  // Try to parse as table (CSV/TSV)
+  const lines = content.split('\n').filter(l => l.trim());
+  const separator = content.includes('\t') ? '\t' : content.includes(';') ? ';' : ',';
+
+  if (lines.length > 1 && lines[0].includes(separator)) {
+    const tableData = lines.map(line => line.split(separator).map(cell => cell.trim().replace(/^"|"$/g, '')));
+    const headers = tableData[0];
+    const rows = tableData.slice(1);
+
+    autoTable(doc, {
+      head: [headers],
+      body: rows,
+      startY: 26,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [240, 247, 246] },
+      margin: { left: 14, right: 14 },
+    });
+  } else {
+    // Plain text content
+    doc.setFontSize(10);
+    doc.setTextColor(30, 30, 30);
+    const splitText = doc.splitTextToSize(content, 260);
+    doc.text(splitText, 14, 30);
+  }
+
+  // Footer
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`MANTIS — SIGG GMAO | Page ${i}/${pageCount}`, 14, doc.internal.pageSize.height - 8);
+  }
+
+  doc.save(fileName.replace(/\.[^.]+$/, '.pdf'));
+}
+
 // ─── Utility: Download a file ──────────────────────────────────
-function downloadFile(file: GeneratedFile) {
-  const blob = new Blob([file.content], { type: 'text/csv;charset=utf-8;' });
+async function downloadFile(file: GeneratedFile, targetFormat?: FileType) {
+  // If requesting conversion to XLSX
+  if (targetFormat === 'xlsx' || (file.type === 'xlsx' && !targetFormat)) {
+    if (file.type === 'csv' || file.type === 'tsv') {
+      await generateXLSX(file.content, file.name);
+      return;
+    }
+  }
+
+  // If requesting conversion to PDF
+  if (targetFormat === 'pdf' || (file.type === 'pdf' && !targetFormat)) {
+    await generatePDF(file.content, file.name);
+    return;
+  }
+
+  // Standard text-based download
+  const fmt = FILE_FORMATS[targetFormat || file.type];
+  const blob = new Blob([file.content], { type: fmt?.mimeType || 'text/plain;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = file.name;
+  link.download = targetFormat
+    ? file.name.replace(/\.[^.]+$/, `.${FILE_FORMATS[targetFormat].ext}`)
+    : file.name;
   link.click();
   URL.revokeObjectURL(url);
 }
 
 // ─── File icon component ───────────────────────────────────────
 function FileDownloadCard({ file }: { file: GeneratedFile }) {
-  const iconMap = {
-    csv: FileSpreadsheet,
-    json: FileText,
-    txt: FileText,
-  };
-  const FileIcon = iconMap[file.type] || FileText;
-  const colorMap = {
-    csv: '#16A34A',
-    json: '#3B82F6',
-    txt: '#6B7280',
+  const [showFormats, setShowFormats] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const fmt = FILE_FORMATS[file.type] || FILE_FORMATS.txt;
+  const FileIcon = fmt.icon;
+
+  const availableConversions: FileType[] = [];
+  if (file.type === 'csv' || file.type === 'tsv') {
+    availableConversions.push('xlsx', 'pdf', 'json', 'html', 'xml');
+  } else if (file.type === 'json') {
+    availableConversions.push('csv', 'xlsx', 'pdf', 'xml', 'yaml');
+  } else if (file.type === 'xml') {
+    availableConversions.push('json', 'csv', 'xlsx', 'html');
+  } else if (file.type === 'sql') {
+    availableConversions.push('csv', 'json', 'xlsx');
+  } else if (file.type === 'md') {
+    availableConversions.push('pdf', 'html');
+  } else if (file.type === 'txt') {
+    availableConversions.push('pdf', 'csv', 'json');
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(file.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex items-center gap-3 rounded-lg p-2.5 mt-2 border border-emerald-800/40"
-      style={{ backgroundColor: 'rgba(22, 163, 74, 0.08)' }}
+    <div
+      className="rounded-lg p-2.5 mt-2"
+      style={{
+        backgroundColor: '#0D2818',
+        border: '1px solid #1A4D2E',
+      }}
     >
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: `${colorMap[file.type]}15` }}
-      >
-        <FileIcon className="w-4.5 h-4.5" style={{ color: colorMap[file.type] }} />
+      {/* File info row */}
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: fmt.color + '20' }}
+        >
+          <FileIcon className="w-4.5 h-4.5" style={{ color: fmt.color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-emerald-300 truncate">{file.name}</p>
+          <p className="text-[10px] text-slate-400">
+            {fmt.label} — {(file.content.length / 1024).toFixed(1)} Ko
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-slate-400 hover:text-white hover:bg-white/10"
+            onClick={handleCopy}
+            title="Copier"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          </Button>
+          <Button
+            size="sm"
+            className="h-7 px-3 text-[11px] gap-1.5 text-white font-medium"
+            style={{ backgroundColor: '#0F766E' }}
+            onClick={() => downloadFile(file)}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#14B8A6')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0F766E')}
+          >
+            <Download className="w-3 h-3" />
+            Télécharger
+          </Button>
+          {availableConversions.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-slate-400 hover:text-white hover:bg-white/10"
+              onClick={() => setShowFormats(!showFormats)}
+              title="Autres formats"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-emerald-300 truncate">{file.name}</p>
-        <p className="text-[10px] text-slate-500">
-          {file.type.toUpperCase()} — {(file.content.length / 1024).toFixed(1)} Ko
-        </p>
-      </div>
-      <Button
-        size="sm"
-        className="h-7 px-3 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white"
-        onClick={() => downloadFile(file)}
-      >
-        <Download className="w-3 h-3" />
-        Télécharger
-      </Button>
-    </motion.div>
+
+      {/* Format conversion row */}
+      <AnimatePresence>
+        {showFormats && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-wrap gap-1.5 mt-2 pt-2" style={{ borderTop: '1px solid #1A4D2E' }}>
+              <span className="text-[9px] text-slate-500 self-center mr-1">Convertir en :</span>
+              {availableConversions.map((fmt) => {
+                const targetFmt = FILE_FORMATS[fmt];
+                const TargetIcon = targetFmt.icon;
+                return (
+                  <button
+                    key={fmt}
+                    onClick={() => downloadFile(file, fmt)}
+                    className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-colors"
+                    style={{
+                      backgroundColor: targetFmt.color + '15',
+                      color: targetFmt.color,
+                      border: `1px solid ${targetFmt.color}30`,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = targetFmt.color + '30')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = targetFmt.color + '15')}
+                  >
+                    <TargetIcon className="w-2.5 h-2.5" />
+                    {targetFmt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -331,8 +548,8 @@ export function FloatingChatBot() {
   };
 
   const currentPrompts = modulePrompts[activeModule];
-  const panelWidth = isExpanded ? 'w-[540px]' : 'w-[400px]';
-  const panelHeight = isExpanded ? 'h-[660px]' : 'h-[520px]';
+  const panelWidth = isExpanded ? 560 : 420;
+  const panelHeight = isExpanded ? 680 : 540;
 
   const formatTime = (date: Date) =>
     new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(date);
@@ -348,10 +565,10 @@ export function FloatingChatBot() {
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-2xl flex items-center justify-center group shadow-2xl transition-all duration-300 hover:scale-105"
+            className="fixed bottom-6 right-6 z-50 w-[68px] h-[68px] rounded-2xl flex items-center justify-center group shadow-2xl transition-all duration-300 hover:scale-105"
             style={{
               background: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 50%, #0EA5E9 100%)',
-              boxShadow: '0 8px 32px rgba(15, 118, 110, 0.45), 0 0 0 3px rgba(20, 184, 166, 0.15)',
+              boxShadow: '0 8px 32px rgba(15, 118, 110, 0.5), 0 0 0 4px rgba(20, 184, 166, 0.2)',
             }}
           >
             <Cpu className="w-7 h-7 text-white group-hover:scale-110 transition-transform" />
@@ -366,15 +583,15 @@ export function FloatingChatBot() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg"
-                style={{ background: '#EA580C' }}
+                style={{ background: '#DC2626' }}
               >
                 {unreadCount > 9 ? '9+' : unreadCount}
               </motion.span>
             )}
             {/* Name badge */}
             <span
-              className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-bold tracking-widest text-white px-2 py-0.5 rounded-full"
-              style={{ background: '#0F766E' }}
+              className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[9px] font-bold tracking-[0.2em] text-white px-3 py-1 rounded-full shadow-lg"
+              style={{ background: '#0A4F47', border: '1px solid #14B8A6' }}
             >
               MANTIS
             </span>
@@ -390,80 +607,120 @@ export function FloatingChatBot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-            className={`fixed bottom-6 right-6 z-50 ${panelWidth} ${panelHeight} flex flex-col overflow-hidden rounded-2xl shadow-2xl`}
+            className="fixed bottom-6 right-6 z-50 flex flex-col overflow-hidden rounded-2xl shadow-2xl"
             style={{
-              backgroundColor: '#0c1a2e',
-              border: '2px solid rgba(20, 184, 166, 0.3)',
-              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(15, 118, 110, 0.15)',
+              width: panelWidth,
+              height: panelHeight,
+              backgroundColor: '#0B1929',
+              border: '2px solid #1A3A4A',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(15, 118, 110, 0.15)',
             }}
           >
             {/* ─── Header ─── */}
             <div
-              className="flex items-center justify-between px-4 py-3"
+              className="flex items-center justify-between px-4 py-3 flex-shrink-0"
               style={{
-                background: 'linear-gradient(135deg, #0F766E 0%, #0C4A44 100%)',
-                borderBottom: '1px solid rgba(20, 184, 166, 0.2)',
+                background: 'linear-gradient(135deg, #0A4F47 0%, #0C6B5F 50%, #0F766E 100%)',
+                borderBottom: '2px solid #14B8A6',
               }}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3">
                 <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #14B8A6, #0EA5E9)' }}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+                  style={{ background: 'linear-gradient(135deg, #14B8A6, #0EA5E9)', border: '2px solid #5EEAD4' }}
                 >
                   <Cpu className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-white tracking-wide">{CHATBOT_NAME}</h3>
+                    <h3 className="text-sm font-bold text-white tracking-wider">{CHATBOT_NAME}</h3>
                     <span
-                      className="text-[8px] font-medium px-1.5 py-0.5 rounded-full tracking-wider"
-                      style={{ backgroundColor: 'rgba(20, 184, 166, 0.25)', color: '#5EEAD4' }}
+                      className="text-[8px] font-bold px-2 py-0.5 rounded-full tracking-wider"
+                      style={{ backgroundColor: '#14B8A6', color: '#022C22' }}
                     >
                       AUTONOME
                     </span>
+                    <span
+                      className="text-[8px] font-medium px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: '#164E3E', color: '#5EEAD4', border: '1px solid #1A6B5A' }}
+                    >
+                      {CHATBOT_VERSION}
+                    </span>
                   </div>
-                  <p className="text-[9px] text-teal-300/60 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    En ligne — {moduleLabels[activeModule]}
+                  <p className="text-[10px] text-teal-200 flex items-center gap-1.5 mt-0.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
+                    <span className="font-medium">En ligne</span>
+                    <span style={{ color: '#0D5C52' }}>|</span>
+                    <span style={{ color: '#5EEAD4' }}>{moduleLabels[activeModule]}</span>
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="w-7 h-7 text-teal-300/60 hover:text-white hover:bg-white/10"
+                  className="w-8 h-8 text-teal-300 hover:text-white hover:bg-teal-700/50"
                   onClick={clearChat}
-                  title="Effacer"
+                  title="Effacer la conversation"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="w-7 h-7 text-teal-300/60 hover:text-white hover:bg-white/10"
+                  className="w-8 h-8 text-teal-300 hover:text-white hover:bg-teal-700/50"
                   onClick={() => setIsExpanded(!isExpanded)}
                   title={isExpanded ? 'Réduire' : 'Agrandir'}
                 >
-                  {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="w-7 h-7 text-teal-300/60 hover:text-white hover:bg-white/10"
+                  className="w-8 h-8 text-teal-300 hover:text-white hover:bg-teal-700/50"
                   onClick={() => setIsOpen(false)}
                   title="Fermer"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
+            </div>
+
+            {/* ─── Format bar ─── */}
+            <div
+              className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0 overflow-x-auto"
+              style={{
+                backgroundColor: '#0A1628',
+                borderBottom: '1px solid #162A3A',
+              }}
+            >
+              <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider flex-shrink-0 mr-1">
+                Formats :
+              </span>
+              {Object.entries(FILE_FORMATS).map(([key, fmt]) => {
+                const FmtIcon = fmt.icon;
+                return (
+                  <span
+                    key={key}
+                    className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 font-medium"
+                    style={{
+                      backgroundColor: fmt.color + '18',
+                      color: fmt.color,
+                      border: `1px solid ${fmt.color}25`,
+                    }}
+                  >
+                    <FmtIcon className="w-2.5 h-2.5" />
+                    {fmt.label}
+                  </span>
+                );
+              })}
             </div>
 
             {/* ─── Messages ─── */}
             <div
               ref={scrollRef}
               className="flex-1 overflow-y-auto p-4 space-y-3"
-              style={{ backgroundColor: '#0c1a2e' }}
+              style={{ backgroundColor: '#0B1929' }}
             >
               {messages.length === 0 ? (
                 /* Welcome screen */
@@ -474,33 +731,37 @@ export function FloatingChatBot() {
                     transition={{ duration: 0.4 }}
                   >
                     <div
-                      className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
-                      style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6, #0EA5E9)' }}
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg"
+                      style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6, #0EA5E9)', border: '2px solid #5EEAD4' }}
                     >
-                      <Cpu className="w-7 h-7 text-white" />
+                      <Cpu className="w-8 h-8 text-white" />
                     </div>
-                    <h4 className="text-base font-bold text-white tracking-wide">{CHATBOT_NAME}</h4>
-                    <p className="text-[10px] text-teal-400/60 mt-0.5 tracking-wide">{CHATBOT_FULL_NAME}</p>
-                    <p className="text-xs text-slate-400 mt-3 max-w-[280px] leading-relaxed">
+                    <h4 className="text-lg font-bold text-white tracking-wider">{CHATBOT_NAME}</h4>
+                    <p className="text-[10px] text-teal-400 mt-0.5 tracking-wide">{CHATBOT_FULL_NAME}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{CHATBOT_VERSION}</p>
+                    <p className="text-xs text-slate-300 mt-3 max-w-[300px] leading-relaxed">
                       Assistant IA autonome spécialisé en maintenance industrielle gaz.
-                      Génération de rapports, tableaux et fichiers téléchargeables.
+                      Génération de rapports et fichiers téléchargeables en <strong className="text-teal-300">11 formats</strong>.
                     </p>
                   </motion.div>
 
                   {/* Capability badges */}
                   <div className="flex flex-wrap justify-center gap-1.5">
                     {[
-                      { icon: FileSpreadsheet, label: 'Rapports CSV', color: '#16A34A' },
-                      { icon: Shield, label: 'Diagnostic', color: '#3B82F6' },
-                      { icon: Download, label: 'Fichiers', color: '#F97316' },
+                      { icon: FileSpreadsheet, label: 'CSV / Excel', color: '#16A34A' },
+                      { icon: FileText, label: 'PDF', color: '#DC2626' },
+                      { icon: FileCode, label: 'JSON / XML', color: '#3B82F6' },
+                      { icon: Table2, label: 'Tableaux', color: '#F97316' },
+                      { icon: Shield, label: 'Diagnostic', color: '#8B5CF6' },
+                      { icon: FileDown, label: '11 formats', color: '#14B8A6' },
                     ].map((cap) => (
                       <span
                         key={cap.label}
-                        className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border"
+                        className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full font-medium"
                         style={{
-                          borderColor: `${cap.color}30`,
-                          backgroundColor: `${cap.color}10`,
+                          backgroundColor: cap.color + '18',
                           color: cap.color,
+                          border: `1px solid ${cap.color}30`,
                         }}
                       >
                         <cap.icon className="w-2.5 h-2.5" />
@@ -510,8 +771,8 @@ export function FloatingChatBot() {
                   </div>
 
                   {/* Suggested prompts */}
-                  <div className="flex flex-col gap-1.5 w-full max-w-[310px]">
-                    <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <div className="flex flex-col gap-1.5 w-full max-w-[340px]">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                       <Sparkles className="w-3 h-3 text-teal-400" />
                       Suggestions — {moduleLabels[activeModule]}
                     </p>
@@ -519,14 +780,24 @@ export function FloatingChatBot() {
                       <button
                         key={prompt}
                         onClick={() => sendMessage(prompt)}
-                        className="flex items-center gap-2 h-auto py-2 px-3 text-left text-xs rounded-lg border transition-all hover:scale-[1.02]"
+                        className="flex items-center gap-2 h-auto py-2.5 px-3 text-left text-xs rounded-lg transition-all hover:scale-[1.02] font-medium"
                         style={{
-                          borderColor: 'rgba(20, 184, 166, 0.15)',
-                          backgroundColor: 'rgba(20, 184, 166, 0.05)',
-                          color: '#94a3b8',
+                          backgroundColor: '#0F2937',
+                          color: '#94A3B8',
+                          border: '1px solid #1A3A4A',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#143040';
+                          e.currentTarget.style.borderColor = '#14B8A6';
+                          e.currentTarget.style.color = '#E2E8F0';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#0F2937';
+                          e.currentTarget.style.borderColor = '#1A3A4A';
+                          e.currentTarget.style.color = '#94A3B8';
                         }}
                       >
-                        <ChevronRight className="w-3 h-3 text-teal-500 flex-shrink-0" />
+                        <ChevronRight className="w-3.5 h-3.5 text-teal-500 flex-shrink-0" />
                         {prompt}
                       </button>
                     ))}
@@ -552,20 +823,27 @@ export function FloatingChatBot() {
                       {/* System message */}
                       {msg.role === 'system' && (
                         <div
-                          className="max-w-[90%] rounded-xl px-3.5 py-2.5 text-xs text-center"
+                          className="max-w-[92%] rounded-xl px-4 py-3 text-xs text-center"
                           style={{
-                            backgroundColor: 'rgba(20, 184, 166, 0.1)',
-                            border: '1px solid rgba(20, 184, 166, 0.2)',
+                            backgroundColor: '#0A3D34',
+                            border: '1px solid #14B8A6',
                           }}
                         >
-                          <div className="flex items-center justify-center gap-1.5 mb-1">
-                            <Sparkles className="w-3 h-3 text-teal-400" />
-                            <span className="font-semibold text-teal-300">{CHATBOT_NAME}</span>
+                          <div className="flex items-center justify-center gap-2 mb-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-teal-300" />
+                            <span className="font-bold text-teal-200 tracking-wider">{CHATBOT_NAME}</span>
                           </div>
-                          <div className="text-slate-300 prose prose-sm prose-invert max-w-none [&_p]:mb-1 [&_strong]:text-teal-300">
+                          <div
+                            className="text-slate-200 prose prose-sm prose-invert max-w-none
+                              [&_p]:mb-1 [&_strong]:text-teal-200
+                              [&_table]:w-full [&_table]:border-collapse [&_table]:my-2
+                              [&_th]:bg-teal-800 [&_th]:text-teal-100 [&_th]:text-[11px] [&_th]:font-bold [&_th]:px-3 [&_th]:py-2 [&_th]:border [&_th]:border-teal-600 [&_th]:text-left
+                              [&_td]:text-[11px] [&_td]:px-3 [&_td]:py-2 [&_td]:border [&_td]:border-teal-700/50 [&_td]:text-slate-200
+                              [&_tr:nth-child(even)_td]:bg-teal-900/30"
+                          >
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                           </div>
-                          <span className="text-[9px] text-slate-600 mt-1 block">{formatTime(msg.timestamp)}</span>
+                          <span className="text-[9px] text-teal-500 mt-1.5 block font-medium">{formatTime(msg.timestamp)}</span>
                         </div>
                       )}
 
@@ -573,48 +851,58 @@ export function FloatingChatBot() {
                       {msg.role === 'assistant' && (
                         <>
                           <div
-                            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                            style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6)' }}
+                            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md"
+                            style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6)', border: '1px solid #5EEAD4' }}
                           >
                             <Cpu className="w-4 h-4 text-white" />
                           </div>
                           <div
-                            className="max-w-[82%] rounded-xl px-3.5 py-2.5 text-sm"
+                            className="max-w-[82%] rounded-xl px-4 py-3 text-sm"
                             style={{
-                              backgroundColor: '#162032',
-                              border: '1px solid rgba(20, 184, 166, 0.12)',
+                              backgroundColor: '#112240',
+                              border: '1px solid #1A3A5C',
                             }}
                           >
-                            {/* Markdown content with table styling */}
+                            {/* Markdown content with enhanced table styling */}
                             <div
                               className="prose prose-sm prose-invert max-w-none text-slate-200
-                                [&_p]:mb-1.5 [&_p:last-child]:mb-0
-                                [&_ul]:mb-1.5 [&_ol]:mb-1.5 [&_li]:mb-0.5
-                                [&_strong]:text-teal-300 [&_em]:text-amber-300
-                                [&_code]:text-teal-300 [&_pre]:bg-[#0a1220] [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-xs [&_pre]:border [&_pre]:border-teal-900/30
-                                [&_h1]:text-base [&_h1]:text-teal-300 [&_h1]:font-bold [&_h1]:mt-3 [&_h1]:mb-1.5
-                                [&_h2]:text-sm [&_h2]:text-teal-400 [&_h2]:font-semibold [&_h2]:mt-2.5 [&_h2]:mb-1
-                                [&_h3]:text-sm [&_h3]:text-cyan-400 [&_h3]:font-medium [&_h3]:mt-2 [&_h3]:mb-1
-                                [&_table]:w-full [&_table]:border-collapse [&_table]:my-2
-                                [&_th]:bg-teal-900/30 [&_th]:text-teal-300 [&_th]:text-[11px] [&_th]:font-semibold [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:border [&_th]:border-teal-800/30 [&_th]:text-left
-                                [&_td]:text-[11px] [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:border [&_td]:border-slate-700/30 [&_td]:text-slate-300
-                                [&_tr:hover_td]:bg-teal-900/10
-                                [&_blockquote]:border-l-2 [&_blockquote]:border-teal-500 [&_blockquote]:pl-3 [&_blockquote]:text-slate-400
-                                [&_hr]:border-teal-800/30 [&_hr]:my-2"
+                                [&_p]:mb-2 [&_p:last-child]:mb-0
+                                [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5
+                                [&_strong]:text-teal-200 [&_em]:text-amber-300
+                                [&_code]:text-teal-300 [&_code]:bg-teal-900/40 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded
+                                [&_pre]:bg-[#0A1628] [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-xs [&_pre]:border [&_pre]:border-teal-800/50
+                                [&_h1]:text-base [&_h1]:text-teal-200 [&_h1]:font-bold [&_h1]:mt-3 [&_h1]:mb-1.5 [&_h1]:pb-1 [&_h1]:border-b [&_h1]:border-teal-800/30
+                                [&_h2]:text-sm [&_h2]:text-teal-300 [&_h2]:font-semibold [&_h2]:mt-2.5 [&_h2]:mb-1
+                                [&_h3]:text-sm [&_h3]:text-cyan-300 [&_h3]:font-medium [&_h3]:mt-2 [&_h3]:mb-1
+
+                                [&_table]:w-full [&_table]:border-collapse [&_table]:my-3 [&_table]:rounded-lg [&_table]:overflow-hidden
+                                [&_thead]:bg-teal-800
+                                [&_th]:text-teal-100 [&_th]:text-[11px] [&_th]:font-bold [&_th]:px-3 [&_th]:py-2.5 [&_th]:border [&_th]:border-teal-600 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider
+                                [&_td]:text-[11px] [&_td]:px-3 [&_td]:py-2 [&_td]:border [&_td]:border-slate-700/50 [&_td]:text-slate-200
+                                [&_tbody_tr:nth-child(even)_td]:bg-slate-800/30
+                                [&_tbody_tr:hover_td]:bg-teal-900/30
+                                [&_blockquote]:border-l-3 [&_blockquote]:border-teal-500 [&_blockquote]:pl-3 [&_blockquote]:text-slate-300 [&_blockquote]:bg-teal-900/10 [&_blockquote]:py-1 [&_blockquote]:rounded-r
+                                [&_hr]:border-slate-700/50 [&_hr]:my-2"
                             >
                               <ReactMarkdown>{msg.content}</ReactMarkdown>
                             </div>
 
                             {/* Downloadable files */}
                             {msg.files && msg.files.length > 0 && (
-                              <div className="mt-2 space-y-1.5">
+                              <div className="mt-3 space-y-2">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <FileDown className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-[10px] font-semibold text-emerald-300 uppercase tracking-wider">
+                                    Fichiers générés ({msg.files.length})
+                                  </span>
+                                </div>
                                 {msg.files.map((file) => (
                                   <FileDownloadCard key={file.name} file={file} />
                                 ))}
                               </div>
                             )}
 
-                            <span className="text-[9px] text-slate-600 mt-1.5 block">{formatTime(msg.timestamp)}</span>
+                            <span className="text-[9px] text-slate-600 mt-2 block">{formatTime(msg.timestamp)}</span>
                           </div>
                         </>
                       )}
@@ -623,19 +911,20 @@ export function FloatingChatBot() {
                       {msg.role === 'user' && (
                         <>
                           <div
-                            className="max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm text-white"
+                            className="max-w-[80%] rounded-xl px-4 py-2.5 text-sm text-white shadow-md"
                             style={{
                               background: 'linear-gradient(135deg, #0F766E, #0D9488)',
+                              border: '1px solid #14B8A6',
                             }}
                           >
                             <p className="whitespace-pre-wrap">{msg.content}</p>
-                            <span className="text-[9px] opacity-50 mt-1 block">{formatTime(msg.timestamp)}</span>
+                            <span className="text-[9px] opacity-60 mt-1 block">{formatTime(msg.timestamp)}</span>
                           </div>
                           <div
                             className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                            style={{ backgroundColor: '#1e293b' }}
+                            style={{ backgroundColor: '#1E293B', border: '1px solid #334155' }}
                           >
-                            <User className="w-4 h-4 text-slate-400" />
+                            <User className="w-4 h-4 text-slate-300" />
                           </div>
                         </>
                       )}
@@ -646,22 +935,22 @@ export function FloatingChatBot() {
                   {sending && (
                     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2.5">
                       <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6)' }}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
+                        style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6)', border: '1px solid #5EEAD4' }}
                       >
                         <Cpu className="w-4 h-4 text-white" />
                       </div>
                       <div
                         className="rounded-xl px-4 py-3"
-                        style={{ backgroundColor: '#162032', border: '1px solid rgba(20, 184, 166, 0.12)' }}
+                        style={{ backgroundColor: '#112240', border: '1px solid #1A3A5C' }}
                       >
                         <div className="flex items-center gap-2">
                           <div className="flex gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                           </div>
-                          <span className="text-[10px] text-slate-500 ml-1">{CHATBOT_NAME} analyse...</span>
+                          <span className="text-[10px] text-teal-300 font-medium ml-1">{CHATBOT_NAME} analyse...</span>
                         </div>
                       </div>
                     </motion.div>
@@ -672,20 +961,31 @@ export function FloatingChatBot() {
 
             {/* ─── Quick prompts ─── */}
             {messages.length > 0 && !sending && (
-              <div className="px-3 pb-1.5 flex gap-1.5 overflow-x-auto" style={{ backgroundColor: '#0c1a2e' }}>
-                {currentPrompts.prompts.slice(0, 2).map((prompt) => (
+              <div
+                className="px-3 pb-1.5 flex gap-1.5 overflow-x-auto flex-shrink-0"
+                style={{ backgroundColor: '#0B1929' }}
+              >
+                {currentPrompts.prompts.slice(0, 3).map((prompt) => (
                   <button
                     key={prompt}
                     onClick={() => sendMessage(prompt)}
-                    className="flex-shrink-0 text-[10px] px-2.5 py-1 rounded-full border flex items-center gap-1 transition-colors whitespace-nowrap"
+                    className="flex-shrink-0 text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap font-medium"
                     style={{
-                      borderColor: 'rgba(20, 184, 166, 0.15)',
-                      backgroundColor: 'rgba(20, 184, 166, 0.06)',
+                      backgroundColor: '#0F2937',
                       color: '#5EEAD4',
+                      border: '1px solid #1A3A4A',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#143040';
+                      e.currentTarget.style.borderColor = '#14B8A6';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0F2937';
+                      e.currentTarget.style.borderColor = '#1A3A4A';
                     }}
                   >
                     <Sparkles className="w-2.5 h-2.5" />
-                    {prompt.length > 35 ? prompt.substring(0, 35) + '...' : prompt}
+                    {prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt}
                   </button>
                 ))}
               </div>
@@ -693,10 +993,10 @@ export function FloatingChatBot() {
 
             {/* ─── Input ─── */}
             <div
-              className="p-3"
+              className="p-3 flex-shrink-0"
               style={{
-                backgroundColor: '#0a1628',
-                borderTop: '1px solid rgba(20, 184, 166, 0.1)',
+                backgroundColor: '#091420',
+                borderTop: '2px solid #1A3A4A',
               }}
             >
               <form
@@ -708,30 +1008,35 @@ export function FloatingChatBot() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={`Demander à ${CHATBOT_NAME}...`}
-                  className="h-10 text-sm text-white placeholder:text-slate-600 border-teal-800/30 focus:border-teal-600/50"
-                  style={{ backgroundColor: '#162032' }}
+                  className="h-11 text-sm text-white placeholder:text-slate-500 border-slate-600 focus:border-teal-500"
+                  style={{
+                    backgroundColor: '#0F2937',
+                    borderColor: '#1A3A4A',
+                  }}
                   disabled={sending}
                 />
                 <Button
                   type="submit"
                   disabled={sending || !input.trim()}
                   size="icon"
-                  className="h-10 w-10 flex-shrink-0 text-white"
+                  className="h-11 w-11 flex-shrink-0 text-white shadow-lg"
                   style={{
                     background: 'linear-gradient(135deg, #0F766E, #14B8A6)',
+                    border: '1px solid #5EEAD4',
                   }}
                 >
                   <Send className="w-4 h-4" />
                 </Button>
               </form>
-              <div className="flex items-center justify-between mt-1.5">
-                <p className="text-[9px] text-slate-700">
-                  {CHATBOT_NAME} — {CHATBOT_FULL_NAME}
-                </p>
-                <div className="flex items-center gap-1">
-                  <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-700" />
-                  <Download className="w-2.5 h-2.5 text-blue-700" />
-                  <span className="text-[8px] text-slate-700">CSV • Rapports</span>
+              <div className="flex items-center justify-between mt-2 px-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-bold text-teal-500 tracking-wider">{CHATBOT_NAME}</span>
+                  <span className="text-[8px] text-slate-600">{CHATBOT_VERSION}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {['CSV', 'XLSX', 'PDF', 'JSON', 'XML', 'SQL'].map((fmt) => (
+                    <span key={fmt} className="text-[8px] text-slate-600 font-medium">{fmt}</span>
+                  ))}
                 </div>
               </div>
             </div>
