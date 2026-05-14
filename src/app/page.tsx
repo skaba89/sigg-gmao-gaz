@@ -12,6 +12,7 @@ import { MaintenanceView } from '@/components/maintenance-view';
 import { StockView } from '@/components/stock-view';
 import { FinancialView } from '@/components/financial-view';
 import { AIAssistantView } from '@/components/ai-assistant-view';
+import { FloatingChatBot } from '@/components/floating-chatbot';
 import { SettingsView } from '@/components/settings-view';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
@@ -61,6 +62,9 @@ function SIGGApp() {
 
       {/* Mobile sidebar overlay */}
       <MobileSidebar />
+
+      {/* Floating AI Chatbot - visible on all pages */}
+      <FloatingChatBot />
     </div>
   );
 }

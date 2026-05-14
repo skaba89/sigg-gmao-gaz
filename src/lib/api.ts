@@ -71,7 +71,11 @@ export const api = {
   getAuditLogs: (params?: string) => apiFetch<any>(`/audit${params ? `?${params}` : ''}`),
 
   // AI
-  sendAIChat: (message: string) => apiFetch<any>('/ai/chat', { method: 'POST', body: JSON.stringify({ message }) }),
+  sendAIChat: (message: string, history?: Array<{ role: string; content: string }>, context?: string) =>
+    apiFetch<any>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, history, context }),
+    }),
 
   // Seed
   seedDatabase: () => apiFetch<any>('/seed'),
