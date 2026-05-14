@@ -193,10 +193,10 @@ function FileDownloadCard({ file }: { file: GeneratedFile }) {
 
 // ─── Main Component ────────────────────────────────────────────
 const suggestedPrompts = [
-  "Génère un rapport KPI en CSV ou Excel",
-  "Rapport complet des équipements en PDF",
-  "Export SQL de la base équipements",
-  "Rapport incidents en XML ou JSON",
+  "Génère un rapport KPI téléchargeable",
+  "Rapport complet des équipements",
+  "Analyse prédictive des équipements",
+  "Bonnes pratiques industrielles gaz",
 ];
 
 export function AIAssistantView() {
@@ -220,7 +220,7 @@ export function AIAssistantView() {
 
     try {
       const conversationHistory = messages.map((m) => ({ role: m.role, content: m.content }));
-      const contextInfo = `L'utilisateur utilise le module Assistant IA de la plateforme GMAO SIGG. Il a accès à la génération de fichiers en 11 formats: CSV, Excel, PDF, JSON, XML, HTML, SQL, Markdown, YAML, TXT, TSV.`;
+      const contextInfo = `L'utilisateur utilise le module Assistant IA de la plateforme GMAO SIGG. Il peut demander des rapports et fichiers téléchargeables dans le format de son choix.`;
       const res = await api.sendAIChat(content, conversationHistory, contextInfo);
       const rawContent = res.response || res.message || res.data || 'Je suis MANTIS, votre assistant maintenance. Comment puis-je vous aider ?';
       const { cleanContent, files } = extractFilesFromContent(rawContent);
@@ -265,7 +265,7 @@ export function AIAssistantView() {
                 <h3 className="text-lg font-bold text-white">MANTIS — Assistant IA</h3>
                 <p className="text-[10px] text-teal-400 mt-1">Maintenance Analysis & Technical Intelligence System</p>
                 <p className="text-sm text-slate-300 mt-3 max-w-md">
-                  Génération de rapports et fichiers en <strong className="text-teal-300">11 formats</strong> : CSV, Excel, PDF, JSON, XML, HTML, SQL, Markdown, YAML, TXT, TSV
+                  Génération de rapports, tableaux et fichiers téléchargeables
                 </p>
               </motion.div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">

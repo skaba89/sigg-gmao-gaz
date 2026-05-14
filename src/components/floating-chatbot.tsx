@@ -84,73 +84,73 @@ const modulePrompts: Record<ModuleKey, { icon: React.ElementType; prompts: strin
   dashboard: {
     icon: LayoutDashboard,
     prompts: [
-      "Génère un rapport KPI en CSV",
-      "Rapport exécutif PDF avec tableaux",
-      "Export dashboard en Excel",
+      "Génère un rapport KPI téléchargeable",
+      "Rapport exécutif avec tableaux",
+      "Analyse la tendance des incidents",
     ],
   },
   equipment: {
     icon: Server,
     prompts: [
-      "Tableau des équipements critiques en Excel",
-      "Rapport PDF état des équipements",
+      "Tableau des équipements critiques",
+      "Rapport état des équipements",
       "Diagnostic compresseur GA90+",
     ],
   },
   'work-orders': {
     icon: Wrench,
     prompts: [
-      "Export OT en retard en CSV",
-      "Rapport ordres de travail en PDF",
-      "Tableau priorisation des OT en Excel",
+      "Rapport des OT en retard",
+      "Aide-moi à rédiger un OT",
+      "Tableau priorisation des interventions",
     ],
   },
   incidents: {
     icon: AlertTriangle,
     prompts: [
-      "Rapport incidents en PDF",
-      "Export CSV des incidents",
+      "Rapport des incidents récents",
       "Analyse causes racines avec tableau",
+      "Procédure déclaration incident",
     ],
   },
   maintenance: {
     icon: CalendarClock,
     prompts: [
-      "Planning maintenance en Excel",
-      "Rapport préventif en PDF",
-      "Export planning en CSV",
+      "Planning maintenance téléchargeable",
+      "Recommandations préventives",
+      "Optimisation planning semaine",
     ],
   },
   stock: {
     icon: Package,
     prompts: [
-      "Rapport stock critique en Excel",
-      "État des stocks en PDF",
-      "Export mouvements en CSV",
+      "Rapport stock critique",
+      "Réapprovisionnement recommandé",
+      "Tableau mouvements de stock",
     ],
   },
   financial: {
     icon: DollarSign,
     prompts: [
-      "Rapport coûts maintenance en PDF",
-      "Tableau dépenses en Excel",
-      "Prévisions budgétaires CSV",
+      "Rapport coûts maintenance",
+      "Tableau répartition des dépenses",
+      "Prévisions budgétaires",
     ],
   },
   'ai-assistant': {
     icon: Bot,
     prompts: [
-      "Rapport complet multi-format",
-      "Génère fichier SQL des équipements",
-      "Export XML des données maintenance",
+      "Génère un rapport complet téléchargeable",
+      "Analyse prédictive équipements",
+      "Bonnes pratiques industrielles gaz",
     ],
   },
   settings: {
     icon: Settings,
     prompts: [
-      "Guide configuration alertes en PDF",
-      "Export config en YAML",
-      "Documentation technique en Markdown",
+      "Guide configuration alertes",
+      "Gestion des utilisateurs",
+      "Paramètres sécurité recommandés",
     ],
   },
 };
@@ -168,15 +168,15 @@ const moduleLabels: Record<ModuleKey, string> = {
 };
 
 const moduleWelcomeMessages: Record<ModuleKey, string> = {
-  dashboard: `Bonjour ! Je suis **MANTIS**, votre assistant maintenance autonome. Sur le Tableau de bord, je peux analyser les KPIs et générer des rapports en **CSV, Excel, PDF, JSON, XML** et plus encore. Que puis-je faire pour vous ?`,
-  equipment: `Module Équipements activé. Je peux créer des **tableaux interactifs**, des rapports en **Excel/PDF/CSV**, et diagnostiquer des pannes. Demandez-moi un rapport !`,
-  'work-orders': `Section Ordres de travail. Je peux rédiger des OT, générer des **rapports multi-format** (PDF, Excel, CSV, HTML), et prioriser vos interventions.`,
-  incidents: `Module Incidents. Je peux créer des **rapports téléchargeables** en PDF, Excel, CSV, XML, SQL et vous guider dans les procédures. Comment aider ?`,
-  maintenance: `Plans de maintenance. Je peux générer des **plannings en Excel/CSV/PDF**, recommander des actions préventives et optimiser vos interventions.`,
-  stock: `Gestion du stock. Je peux produire des **rapports multi-format** (Excel, PDF, CSV, JSON, XML), recommander des réapprovisionnements et analyser les mouvements.`,
-  financial: `Volet financier. Je peux générer des **rapports de coûts en PDF/Excel/CSV**, établir des prévisions et optimiser les dépenses. Quel format préférez-vous ?`,
-  'ai-assistant': `Bienvenue dans l'espace MANTIS complet. Je génère des fichiers en **11 formats** : CSV, Excel (XLSX), PDF, JSON, XML, HTML, SQL, Markdown, YAML, TXT, TSV. Je crée aussi des **tableaux de données** structurés.`,
-  settings: `Paramètres de la plateforme. Je peux générer des documentations en **Markdown/PDF**, des configurations en **YAML/JSON/XML**, et vous guider dans les réglages.`,
+  dashboard: `Bonjour ! Je suis **MANTIS**, votre assistant maintenance autonome. Sur le Tableau de bord, je peux analyser les KPIs, générer des rapports et tableaux. Que puis-je faire pour vous ?`,
+  equipment: `Module Équipements activé. Je peux créer des **tableaux interactifs**, des **rapports téléchargeables**, et diagnostiquer des pannes. Demandez-moi un rapport !`,
+  'work-orders': `Section Ordres de travail. Je peux rédiger des OT, générer des **rapports téléchargeables**, et prioriser vos interventions.`,
+  incidents: `Module Incidents. Je peux créer des **rapports téléchargeables** et vous guider dans les procédures. Comment aider ?`,
+  maintenance: `Plans de maintenance. Je peux générer des **plannings et rapports téléchargeables**, recommander des actions préventives et optimiser vos interventions.`,
+  stock: `Gestion du stock. Je peux produire des **rapports téléchargeables**, recommander des réapprovisionnements et analyser les mouvements.`,
+  financial: `Volet financier. Je peux générer des **rapports de coûts téléchargeables**, établir des prévisions et optimiser les dépenses.`,
+  'ai-assistant': `Bienvenue dans l'espace MANTIS complet. Je peux générer des **fichiers téléchargeables** dans le format de votre choix, créer des **tableaux de données** et répondre à toutes vos questions maintenance.`,
+  settings: `Paramètres de la plateforme. Je peux générer des **documentations et configurations**, et vous guider dans les réglages.`,
 };
 
 // ─── Utility: Extract downloadable files from AI response ──────
@@ -686,35 +686,7 @@ export function FloatingChatBot() {
               </div>
             </div>
 
-            {/* ─── Format bar ─── */}
-            <div
-              className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0 overflow-x-auto"
-              style={{
-                backgroundColor: '#0A1628',
-                borderBottom: '1px solid #162A3A',
-              }}
-            >
-              <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider flex-shrink-0 mr-1">
-                Formats :
-              </span>
-              {Object.entries(FILE_FORMATS).map(([key, fmt]) => {
-                const FmtIcon = fmt.icon;
-                return (
-                  <span
-                    key={key}
-                    className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 font-medium"
-                    style={{
-                      backgroundColor: fmt.color + '18',
-                      color: fmt.color,
-                      border: `1px solid ${fmt.color}25`,
-                    }}
-                  >
-                    <FmtIcon className="w-2.5 h-2.5" />
-                    {fmt.label}
-                  </span>
-                );
-              })}
-            </div>
+
 
             {/* ─── Messages ─── */}
             <div
@@ -741,19 +713,16 @@ export function FloatingChatBot() {
                     <p className="text-[10px] text-slate-500 mt-0.5">{CHATBOT_VERSION}</p>
                     <p className="text-xs text-slate-300 mt-3 max-w-[300px] leading-relaxed">
                       Assistant IA autonome spécialisé en maintenance industrielle gaz.
-                      Génération de rapports et fichiers téléchargeables en <strong className="text-teal-300">11 formats</strong>.
+                      Génération de rapports, tableaux et fichiers téléchargeables.
                     </p>
                   </motion.div>
 
                   {/* Capability badges */}
                   <div className="flex flex-wrap justify-center gap-1.5">
                     {[
-                      { icon: FileSpreadsheet, label: 'CSV / Excel', color: '#16A34A' },
-                      { icon: FileText, label: 'PDF', color: '#DC2626' },
-                      { icon: FileCode, label: 'JSON / XML', color: '#3B82F6' },
                       { icon: Table2, label: 'Tableaux', color: '#F97316' },
+                      { icon: FileDown, label: 'Rapports', color: '#14B8A6' },
                       { icon: Shield, label: 'Diagnostic', color: '#8B5CF6' },
-                      { icon: FileDown, label: '11 formats', color: '#14B8A6' },
                     ].map((cap) => (
                       <span
                         key={cap.label}
@@ -1029,15 +998,8 @@ export function FloatingChatBot() {
                 </Button>
               </form>
               <div className="flex items-center justify-between mt-2 px-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-bold text-teal-500 tracking-wider">{CHATBOT_NAME}</span>
-                  <span className="text-[8px] text-slate-600">{CHATBOT_VERSION}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {['CSV', 'XLSX', 'PDF', 'JSON', 'XML', 'SQL'].map((fmt) => (
-                    <span key={fmt} className="text-[8px] text-slate-600 font-medium">{fmt}</span>
-                  ))}
-                </div>
+                <span className="text-[9px] font-bold text-teal-500 tracking-wider">{CHATBOT_NAME}</span>
+                <span className="text-[8px] text-slate-600">{CHATBOT_VERSION}</span>
               </div>
             </div>
           </motion.div>
