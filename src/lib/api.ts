@@ -90,6 +90,16 @@ export const api = {
       body: JSON.stringify({ data, format, fileName }),
     }),
 
+  // IoT
+  getIoTSensors: () => apiFetch<any>('/iot/sensors'),
+  getIoTSensorById: (id: string) => apiFetch<any>(`/iot/sensors/${id}`),
+  createIoTSensor: (data: any) => apiFetch<any>('/iot/sensors', { method: 'POST', body: JSON.stringify(data) }),
+  updateIoTSensor: (id: string, data: any) => apiFetch<any>(`/iot/sensors/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getIoTReadings: (sensorId: string, params?: string) => apiFetch<any>(`/iot/readings/${sensorId}${params ? `?${params}` : ''}`),
+  getIoTAlerts: (params?: string) => apiFetch<any>(`/iot/alerts${params ? `?${params}` : ''}`),
+  updateIoTAlert: (id: string, data: any) => apiFetch<any>(`/iot/alerts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getIoTDashboard: () => apiFetch<any>('/iot/dashboard'),
+
   // Seed
   seedDatabase: () => apiFetch<any>('/seed'),
 };

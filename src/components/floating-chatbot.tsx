@@ -23,6 +23,7 @@ import {
   Server,
   LayoutDashboard,
   Settings,
+  Wifi,
   ChevronRight,
   Download,
   FileText,
@@ -145,6 +146,14 @@ const modulePrompts: Record<ModuleKey, { icon: React.ElementType; prompts: strin
       "Bonnes pratiques industrielles gaz",
     ],
   },
+  iot: {
+    icon: Wifi,
+    prompts: [
+      "Analyse les alertes capteurs IoT",
+      "Rapport état des capteurs",
+      "Prédiction de panne via IoT",
+    ],
+  },
   settings: {
     icon: Settings,
     prompts: [
@@ -163,6 +172,7 @@ const moduleLabels: Record<ModuleKey, string> = {
   maintenance: 'Plans maintenance',
   stock: 'Stock',
   financial: 'Financier',
+  iot: 'IoT Capteurs',
   'ai-assistant': 'Assistant IA',
   settings: 'Paramètres',
 };
@@ -175,6 +185,7 @@ const moduleWelcomeMessages: Record<ModuleKey, string> = {
   maintenance: `Plans de maintenance. Je peux générer des **plannings et rapports téléchargeables**, recommander des actions préventives et optimiser vos interventions.`,
   stock: `Gestion du stock. Je peux produire des **rapports téléchargeables**, recommander des réapprovisionnements et analyser les mouvements.`,
   financial: `Volet financier. Je peux générer des **rapports de coûts téléchargeables**, établir des prévisions et optimiser les dépenses.`,
+  iot: `Module IoT Capteurs. Je peux analyser les **données de capteurs en temps réel**, détecter des **anomalies**, prédire des pannes et générer des rapports sur l'état des équipements surveillés.`,
   'ai-assistant': `Bienvenue dans l'espace MANTIS complet. Je peux générer des **fichiers téléchargeables** dans le format de votre choix, créer des **tableaux de données** et répondre à toutes vos questions maintenance.`,
   settings: `Paramètres de la plateforme. Je peux générer des **documentations et configurations**, et vous guider dans les réglages.`,
 };

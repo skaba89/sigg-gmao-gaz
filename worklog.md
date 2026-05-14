@@ -1,32 +1,41 @@
 ---
-Task ID: 1
+Task ID: iot-module
 Agent: Main Agent
-Task: Redesign MANTIS chatbot with solid backgrounds, multi-format file generation, and enhanced features
+Task: Implement complete IoT module in SIGG GMAO platform
 
 Work Log:
-- Read existing FloatingChatbot.tsx (744 lines), API route, and api.ts
-- Installed xlsx, jspdf, jspdf-autotable packages for file generation
-- Completely rewrote FloatingChatbot.tsx with:
-  - Solid opaque backgrounds (#0B1929, #0A1628, #091420) — no transparency/glassmorphism
-  - Proper color contrasts with solid borders (#1A3A4A, #1A3A5C)
-  - Named identity: MANTIS v2.0 with prominent branding
-  - 11 file format support: CSV, XLSX, PDF, JSON, XML, HTML, SQL, Markdown, YAML, TXT, TSV
-  - Format bar showing all supported formats
-  - FileDownloadCard with copy-to-clipboard, download, and format conversion buttons
-  - XLSX generation via SheetJS (xlsx library)
-  - PDF generation via jsPDF + autotable with SIGG branding
-  - Enhanced table rendering with alternating rows, bold headers
-  - Module-aware prompts updated for multi-format
-- Updated API route (/api/ai/chat/route.ts) with comprehensive system prompt covering all 11 formats
-- Created /api/ai/generate-file/route.ts as server-side endpoint
-- Updated api.ts with generateFile method
-- Rewrote ai-assistant-view.tsx to match floating chatbot features
+- Updated ModuleKey type in app-store.ts to include 'iot'
+- Added IoT navigation item in app-sidebar.tsx (section: SURVEILLANCE, icon: Wifi)
+- Added IoTView import and route in app/page.tsx
+- Updated api.ts with 8 IoT API methods (sensors, readings, alerts, dashboard)
+- Created iot-view.tsx (700+ lines) with:
+  - Real-time simulated sensor data (28 sensors across 10 equipments, 6 sites)
+  - 6 sensor types: temperature, pressure, vibration, flow, level, gas_leak
+  - Live data updates every 3 seconds with realistic fluctuations
+  - KPI cards (total, online, warning, critical, unacknowledged alerts)
+  - 4 tabs: Dashboard, Sensors, Alerts, Analytics
+  - Interactive sensor cards with click-to-select detail view
+  - Real-time area chart for selected sensor
+  - Pie chart for sensor type distribution
+  - Bar chart for site status
+  - Sensor health matrix table
+  - Alert list with acknowledge functionality
+  - Filters by site, type, status
+- Created 5 API routes:
+  - GET/POST /api/iot/sensors
+  - GET/PUT /api/iot/sensors/[id]
+  - GET /api/iot/readings/[sensorId]
+  - GET /api/iot/alerts
+  - PUT /api/iot/alerts/[id]
+  - GET /api/iot/dashboard
+- Integrated IoT with MANTIS chatbot (prompts, labels, welcome messages)
+- Updated app-header with IoT module title and search terms
 - Build successful with zero errors
 
 Stage Summary:
-- All 11 file formats supported: CSV, XLSX, PDF, JSON, XML, HTML, SQL, Markdown, YAML, TXT, TSV
-- Solid opaque dark backgrounds with high contrast borders — no transparency
-- XLSX/PDF binary generation works client-side via xlsx and jspdf libraries
-- Format conversion available on each file card (e.g., CSV → XLSX, CSV → PDF, JSON → YAML, etc.)
-- Copy-to-clipboard feature added to file cards
-- Both floating chatbot and full-page AI assistant view updated
+- Complete IoT module deployed with real-time monitoring
+- 28 simulated sensors across 6 sites and 10 equipments
+- Live data with 3-second refresh interval
+- Alert system with critical/warning/offline detection
+- Full MANTIS AI integration for IoT data analysis
+- All API endpoints functional

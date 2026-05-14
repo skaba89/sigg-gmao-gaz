@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Package,
   DollarSign,
+  Wifi,
   Bot,
   Settings,
   ChevronLeft,
@@ -31,6 +32,7 @@ const navItems: { key: ModuleKey; label: string; icon: React.ElementType; sectio
   { key: 'maintenance', label: 'Plans maintenance', icon: CalendarClock, section: 'GESTION' },
   { key: 'stock', label: 'Stock', icon: Package },
   { key: 'financial', label: 'Financier', icon: DollarSign },
+  { key: 'iot', label: 'IoT Capteurs', icon: Wifi, section: 'SURVEILLANCE' },
   { key: 'ai-assistant', label: 'Assistant IA', icon: Bot, section: 'OUTILS' },
   { key: 'settings', label: 'Paramètres', icon: Settings },
 ];

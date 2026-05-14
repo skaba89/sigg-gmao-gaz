@@ -12,6 +12,7 @@ import { MaintenanceView } from '@/components/maintenance-view';
 import { StockView } from '@/components/stock-view';
 import { FinancialView } from '@/components/financial-view';
 import { AIAssistantView } from '@/components/ai-assistant-view';
+import { IoTView } from '@/components/iot-view';
 import { FloatingChatBot } from '@/components/floating-chatbot';
 import { SettingsView } from '@/components/settings-view';
 import { LoginPage } from '@/components/login-page';
@@ -26,6 +27,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   maintenance: MaintenanceView,
   stock: StockView,
   financial: FinancialView,
+  iot: IoTView,
   'ai-assistant': AIAssistantView,
   settings: SettingsView,
 };

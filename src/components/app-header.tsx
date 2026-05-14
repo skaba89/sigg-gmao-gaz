@@ -47,6 +47,7 @@ const moduleTitles: Record<ModuleKey, string> = {
   maintenance: 'Plans de Maintenance',
   stock: 'Gestion du Stock',
   financial: 'Suivi Financier',
+  iot: 'IoT Capteurs',
   'ai-assistant': 'Assistant IA',
   settings: 'Paramètres',
 };
@@ -55,9 +56,11 @@ const moduleTitles: Record<ModuleKey, string> = {
 const equipmentTerms = ['équipement', 'equipement', 'compresseur', 'pompe', 'moteur', 'gaz', 'vanne', 'turbine', 'générateur', 'generateur', 'transformateur', 'chaudière', 'chaudiere', 'machine'];
 const workOrderTerms = ['ot', 'ordre', 'travail', 'intervention', 'curatif', 'préventif', 'preventif', 'correctif', 'planifié', 'planifie', 'réparation', 'reparation'];
 const incidentTerms = ['incident', 'panne', 'urgence', 'critique', 'fuite', 'explosion', 'alarme', 'défaut', 'defaut', 'anomalie', 'danger'];
+const iotTerms = ['iot', 'capteur', 'sensor', 'température', 'pression', 'vibration', 'débit', 'surveillance', 'monitoring', 'telemetrie', 'télémétrie'];
 
 function getSearchModule(query: string): ModuleKey {
   const q = query.toLowerCase().trim();
+  if (iotTerms.some(t => q.includes(t))) return 'iot';
   if (workOrderTerms.some(t => q.includes(t))) return 'work-orders';
   if (incidentTerms.some(t => q.includes(t))) return 'incidents';
   if (equipmentTerms.some(t => q.includes(t))) return 'equipment';

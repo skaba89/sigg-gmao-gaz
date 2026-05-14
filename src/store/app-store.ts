@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ModuleKey = 'dashboard' | 'equipment' | 'work-orders' | 'incidents' | 'maintenance' | 'stock' | 'financial' | 'ai-assistant' | 'settings';
+export type ModuleKey = 'dashboard' | 'equipment' | 'work-orders' | 'incidents' | 'maintenance' | 'stock' | 'financial' | 'iot' | 'ai-assistant' | 'settings';
 
 interface User {
   id: string;
