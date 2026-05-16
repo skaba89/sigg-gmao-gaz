@@ -30,25 +30,44 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (keep .env.example, ignore the rest)
+.env
+.env*.local
+!.env.example
 
 # vercel
 .vercel
-
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 local-*
+
+# IDE / AI
 .claude
 .z-ai-config
+
+# Logs
 *.log
 dev.log
 dev.out.log
+server.log
+
+# Test / Prompt
 test
 prompt
 
-server.log
 # Skills directory
 /skills/
+
+# Docker volumes (local)
+docker/volumes/
+
+# Database (local SQLite - not needed)
+db/
+
+# Agent context
+agent-ctx/
+
+# Download directory (generated files)
+download/

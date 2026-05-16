@@ -1,0 +1,89 @@
+# ============================================================
+# SIGG GMAO Platform - Docker Compose
+# Societe Interprofessionnelle du Gaz de Guinee
+# ============================================================
+# Usage:
+#   docker-compose up -d --build          # Start all services
+#   docker-compose logs -f app            # Follow app logs
+#   docker-compose down -v                # Stop and remove volumes
+#   docker-compose exec app npx prisma studio  # Open Prisma Studio
+# ============================================================
+
+services:
+  # ============================================================
+  # PostgreSQL - Main Database
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: sigg-gmao-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sigg_gmao}
+      POSTGRES_USER: ${POSTGRES_USER:-sigg_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sigg_secure_2024}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sigg_admin} -d ${POSTGRES_DB:-sigg_gmao}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - sigg-network
+
+  # ============================================================
+  # Next.js Application - SIGG GMAO
+  # ============================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sigg-gmao-app
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sigg_admin}:${POSTGRES_PASSWORD:-sigg_secure_2024}@postgres:5432/${POSTGRES_DB:-sigg_gmao}?schema=public
+
+      # Authentication - JWT
+      JWT_SECRET: ${JWT_SECRET:-sigg-gmao-jwt-secret-change-in-production-2024}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+
+      # Seed endpoint protection
+      SEED_KEY: ${SEED_KEY:-sigg-seed-key-change-in-production-2024}
+
+      # Application
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - sigg-network
+
+# ============================================================
+# Persistent Volumes
+# ============================================================
+volumes:
+  postgres_data:
+    driver: local
+
+# ============================================================
+# Dedicated Network
+# ============================================================
+networks:
+  sigg-network:
+    driver: bridge
