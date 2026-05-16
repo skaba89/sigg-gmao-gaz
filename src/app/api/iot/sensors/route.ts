@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { withAuth, type TokenPayload } from '@/lib/auth-utils';
 
 // Simulated IoT sensors data
 const SITES = ['Conakry', 'Kamsar', 'Boké', 'Nzérékoré', 'Labé', 'Kindia'];
@@ -69,31 +70,37 @@ function getSensors() {
   return cachedSensors;
 }
 
-export async function GET() {
-  try {
-    const sensors = getSensors();
-    return NextResponse.json(sensors);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export const GET = withAuth(
+  async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
+    try {
+      const sensors = getSensors();
+      return NextResponse.json(sensors);
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  },
+  { roles: ['SUPER_ADMIN', 'DIRECTION_GENERALE', 'RESP_MAINTENANCE'] }
+);
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const sensors = getSensors();
-    const newSensor = {
-      id: `SENSOR-${Date.now()}`,
-      ...body,
-      currentValue: 0,
-      status: 'offline',
-      lastReading: new Date().toISOString(),
-      battery: 100,
-      signal: 0,
-    };
-    sensors.push(newSensor);
-    return NextResponse.json(newSensor, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export const POST = withAuth(
+  async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
+    try {
+      const body = await request.json();
+      const sensors = getSensors();
+      const newSensor = {
+        id: `SENSOR-${Date.now()}`,
+        ...body,
+        currentValue: 0,
+        status: 'offline',
+        lastReading: new Date().toISOString(),
+        battery: 100,
+        signal: 0,
+      };
+      sensors.push(newSensor);
+      return NextResponse.json(newSensor, { status: 201 });
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  },
+  { roles: ['SUPER_ADMIN', 'RESP_MAINTENANCE'] }
+);

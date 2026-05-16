@@ -1,9 +1,14 @@
+import { blacklistToken, getTokenFromHeaders } from '@/lib/auth-utils';
+
 export async function POST(request: Request) {
   try {
-    // For now, just return success. Client should discard the token.
-    // When JWT with proper session management is added, invalidate the token here.
+    const token = getTokenFromHeaders(request);
+    if (token) {
+      await blacklistToken(token);
+    }
     return Response.json({ message: 'Déconnexion réussie' });
   } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+    // Even if blacklisting fails, still return success to client
+    return Response.json({ message: 'Déconnexion réussie' });
   }
 }

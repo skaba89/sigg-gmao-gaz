@@ -1,21 +1,21 @@
 import ZAI from 'z-ai-web-dev-sdk';
+import { withAuth, type TokenPayload } from '@/lib/auth-utils';
+import { validateOrThrow, chatMessageSchema } from '@/lib/validations';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export async function POST(request: Request) {
-  try {
-    const { message, context, history } = await request.json();
+export const POST = withAuth(
+  async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
+    try {
+      const body = await request.json();
+      const data = validateOrThrow(chatMessageSchema, body);
 
-    if (!message) {
-      return Response.json({ error: 'Message requis' }, { status: 400 });
-    }
+      const zai = await ZAI.create();
 
-    const zai = await ZAI.create();
-
-    const systemPrompt = `Tu es MANTIS (Maintenance Analysis & Technical Intelligence System), l'assistant IA autonome de la plateforme GMAO de la Société Interprofessionnelle du Gaz de Guinée (SIGG). Tu es un expert en maintenance industrielle gazière.
+      const systemPrompt = `Tu es MANTIS (Maintenance Analysis & Technical Intelligence System), l'assistant IA autonome de la plateforme GMAO de la Société Interprofessionnelle du Gaz de Guinée (SIGG). Tu es un expert en maintenance industrielle gazière.
 
 IDENTITÉ: Tu t'appelles MANTIS. Tu es proactif, organisé, autonome et structuré. Tu parles TOUJOURS en français professionnel.
 
@@ -138,42 +138,47 @@ COMPORTEMENT AUTONOME:
 - Organise tes réponses avec des sections claires et des tableaux structurés
 - Si l'utilisateur ne précise pas le format, propose CSV par défaut et mentionne les autres formats disponibles
 
-${context ? `\nContexte additionnel: ${context}` : ''}`;
+${data.context ? `\nContexte additionnel: ${data.context}` : ''}`;
 
-    // Build conversation messages with history support
-    const conversationMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: systemPrompt },
-    ];
+      // Build conversation messages with history support
+      const conversationMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system', content: systemPrompt },
+      ];
 
-    // Add conversation history for multi-turn context (keep last 10 messages)
-    if (history && Array.isArray(history) && history.length > 0) {
-      const recentHistory = history.slice(-10);
-      for (const msg of recentHistory) {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          conversationMessages.push({
-            role: msg.role,
-            content: msg.content,
-          });
+      // Add conversation history for multi-turn context (keep last 10 messages)
+      if (body.history && Array.isArray(body.history) && body.history.length > 0) {
+        const recentHistory = body.history.slice(-10);
+        for (const msg of recentHistory) {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            conversationMessages.push({
+              role: msg.role,
+              content: msg.content,
+            });
+          }
         }
       }
+
+      // Add the current user message
+      conversationMessages.push({
+        role: 'user',
+        content: data.message,
+      });
+
+      const completion = await zai.chat.completions.create({
+        messages: conversationMessages,
+      });
+
+      return Response.json({ response: completion.choices[0]?.message?.content });
+    } catch (error: any) {
+      if (error.message?.startsWith('Validation:')) {
+        return Response.json({ error: error.message }, { status: 400 });
+      }
+      console.error('AI Chat Error:', error);
+      return Response.json(
+        { error: error.message || "Erreur lors de la communication avec l'assistant IA" },
+        { status: 500 }
+      );
     }
-
-    // Add the current user message
-    conversationMessages.push({
-      role: 'user',
-      content: message,
-    });
-
-    const completion = await zai.chat.completions.create({
-      messages: conversationMessages,
-    });
-
-    return Response.json({ response: completion.choices[0]?.message?.content });
-  } catch (error: any) {
-    console.error('AI Chat Error:', error);
-    return Response.json(
-      { error: error.message || "Erreur lors de la communication avec l'assistant IA" },
-      { status: 500 }
-    );
   }
-}
+  // No role restriction - all authenticated users
+);

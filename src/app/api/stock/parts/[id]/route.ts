@@ -1,41 +1,84 @@
 import { db } from '@/lib/db';
+import { withAuth, type TokenPayload } from '@/lib/auth-utils';
+import { validateOrThrow, updatePartSchema } from '@/lib/validations';
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
+export const GET = withAuth(
+  async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
+    try {
+      const { id } = await context.params;
+      const part = await db.part.findFirst({
+        where: { id, deletedAt: null },
+        include: {
+          category: { select: { name: true, code: true } },
+          warehouseStock: {
+            include: { warehouse: { select: { name: true, code: true } } },
+          },
+        },
+      });
 
-    const existing = await db.part.findUnique({ where: { id } });
-    if (!existing) {
-      return Response.json({ error: 'Pièce non trouvée' }, { status: 404 });
+      if (!part) {
+        return Response.json({ error: 'Pièce non trouvée' }, { status: 404 });
+      }
+
+      return Response.json(part);
+    } catch (error: any) {
+      return Response.json({ error: error.message }, { status: 500 });
     }
+  },
+  { roles: ['SUPER_ADMIN', 'DIRECTION_GENERALE', 'RESP_STOCK', 'RESP_MAINTENANCE'] }
+);
 
-    const part = await db.part.update({
-      where: { id },
-      data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.description !== undefined && { description: body.description }),
-        ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
-        ...(body.manufacturer !== undefined && { manufacturer: body.manufacturer }),
-        ...(body.partNumber !== undefined && { partNumber: body.partNumber }),
-        ...(body.unit !== undefined && { unit: body.unit }),
-        ...(body.unitPrice !== undefined && { unitPrice: body.unitPrice }),
-        ...(body.minStockLevel !== undefined && { minStockLevel: body.minStockLevel }),
-        ...(body.maxStockLevel !== undefined && { maxStockLevel: body.maxStockLevel }),
-        ...(body.currentStock !== undefined && { currentStock: body.currentStock }),
-        ...(body.reorderPoint !== undefined && { reorderPoint: body.reorderPoint }),
-        ...(body.leadTimeDays !== undefined && { leadTimeDays: body.leadTimeDays }),
-        ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
-        ...(body.specifications !== undefined && { specifications: body.specifications }),
-        ...(body.isActive !== undefined && { isActive: body.isActive }),
-      },
-      include: {
-        category: { select: { name: true, code: true } },
-      },
-    });
+export const PUT = withAuth(
+  async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
+    try {
+      const { id } = await context.params;
+      const body = await request.json();
+      const data = validateOrThrow(updatePartSchema, body);
 
-    return Response.json(part);
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
-  }
-}
+      const existing = await db.part.findFirst({ where: { id, deletedAt: null } });
+      if (!existing) {
+        return Response.json({ error: 'Pièce non trouvée' }, { status: 404 });
+      }
+
+      const part = await db.part.update({
+        where: { id },
+        data,
+        include: {
+          category: { select: { name: true, code: true } },
+        },
+      });
+
+      return Response.json(part);
+    } catch (error: any) {
+      if (error.message?.startsWith('Validation:')) {
+        return Response.json({ error: error.message }, { status: 400 });
+      }
+      return Response.json({ error: error.message }, { status: 500 });
+    }
+  },
+  { roles: ['SUPER_ADMIN', 'DIRECTION_GENERALE', 'RESP_STOCK'] }
+);
+
+export const DELETE = withAuth(
+  async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
+    try {
+      const { id } = await context.params;
+
+      const existing = await db.part.findFirst({ where: { id, deletedAt: null } });
+      if (!existing) {
+        return Response.json({ error: 'Pièce non trouvée' }, { status: 404 });
+      }
+
+      // Soft delete
+      await db.part.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+
+      return Response.json({ message: 'Supprimé avec succès' });
+    } catch (error: any) {
+      return Response.json({ error: error.message }, { status: 500 });
+    }
+  },
+  { roles: ['SUPER_ADMIN'] }
+);
