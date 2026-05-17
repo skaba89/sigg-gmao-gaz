@@ -47,40 +47,43 @@ export const POST = withAuth(
       const body = await request.json();
       const data = validateOrThrow(createPurchaseOrderSchema, body);
 
-      // Generate code
-      const count = await db.purchaseOrder.count();
-      const code = `PO-${String(count + 1).padStart(5, '0')}`;
-
       // Calculate total
       const totalAmount = data.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
-      const purchaseOrder = await db.purchaseOrder.create({
-        data: {
-          code,
-          supplierId: data.supplierId,
-          status: 'BROUILLON',
-          totalAmount,
-          currency: 'GNF',
-          requestedById: user.userId,
-          expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : undefined,
-          notes: data.notes,
-          items: {
-            create: data.items.map((item) => ({
-              partId: item.partId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalPrice: item.quantity * item.unitPrice,
-              receivedQuantity: 0,
-            })),
+      // Use transaction for atomicity: create PO + items together
+      const purchaseOrder = await db.$transaction(async (tx) => {
+        // Generate code inside transaction to avoid race conditions
+        const count = await tx.purchaseOrder.count();
+        const code = `PO-${String(count + 1).padStart(5, '0')}`;
+
+        return tx.purchaseOrder.create({
+          data: {
+            code,
+            supplierId: data.supplierId,
+            status: 'BROUILLON',
+            totalAmount,
+            currency: 'GNF',
+            requestedById: user.userId,
+            expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : undefined,
+            notes: data.notes,
+            items: {
+              create: data.items.map((item) => ({
+                partId: item.partId,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.quantity * item.unitPrice,
+                receivedQuantity: 0,
+              })),
+            },
           },
-        },
-        include: {
-          supplier: { select: { name: true, code: true } },
-          requestedBy: { select: { name: true } },
-          items: {
-            include: { part: { select: { name: true, code: true, unit: true } } },
+          include: {
+            supplier: { select: { name: true, code: true } },
+            requestedBy: { select: { name: true } },
+            items: {
+              include: { part: { select: { name: true, code: true, unit: true } } },
+            },
           },
-        },
+        });
       });
 
       return Response.json(purchaseOrder, { status: 201 });

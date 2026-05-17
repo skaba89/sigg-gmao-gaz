@@ -332,6 +332,34 @@ export const chatMessageSchema = z.object({
   context: z.string().optional(),
 });
 
+// ---- IoT Sensors ----
+export const createIoTSensorSchema = z.object({
+  code: z.string().min(1, 'Code requis').max(50),
+  name: z.string().min(1, 'Nom requis').max(200),
+  type: z.enum(['TEMPERATURE', 'PRESSURE', 'VIBRATION', 'FLOW', 'LEVEL', 'GAS_LEAK']),
+  unit: z.string().min(1, 'Unité requise').max(20),
+  equipmentId: z.string().min(1, 'Equipement requis'),
+  siteId: z.string().min(1, 'Site requis'),
+  minValue: z.number(),
+  maxValue: z.number(),
+  alertLow: z.number().optional(),
+  alertHigh: z.number().optional(),
+  criticalLow: z.number().optional(),
+  criticalHigh: z.number().optional(),
+});
+
+// ---- Financial Costs ----
+export const createMaintenanceCostSchema = z.object({
+  workOrderId: z.string().optional(),
+  equipmentId: z.string().optional(),
+  siteId: z.string().min(1, 'Site requis'),
+  type: z.enum(['MAIN_DOEUVRE', 'PIECES', 'OUTILLAGE', 'SOUS_TRAITANCE', 'AUTRE']),
+  amount: z.number().positive('Montant doit être positif'),
+  currency: z.string().default('GNF'),
+  date: z.string().optional(),
+  description: z.string().optional(),
+});
+
 // ---- Helper: Validate and return parsed data or error response ----
 export function validateOrThrow<T extends z.ZodType>(schema: T, data: unknown): z.infer<T> {
   const result = schema.safeParse(data);

@@ -89,9 +89,12 @@ export const DELETE = withAuth(
         return Response.json({ error: 'Plan de maintenance non trouvé' }, { status: 404 });
       }
 
-      await db.maintenancePlan.delete({ where: { id } });
+      await db.maintenancePlan.update({
+        where: { id },
+        data: { isActive: false },
+      });
 
-      return Response.json({ message: 'Plan de maintenance supprimé avec succès' });
+      return Response.json({ message: 'Plan de maintenance désactivé avec succès' });
     } catch (error: any) {
       return Response.json({ error: error.message }, { status: 500 });
     }

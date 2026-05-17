@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { db } from '@/lib/db';
 import { withAuth, type TokenPayload } from '@/lib/auth-utils';
 
 export const GET = withAuth(
@@ -7,22 +7,37 @@ export const GET = withAuth(
       const { sensorId } = await context.params;
       const { searchParams } = new URL(request.url);
       const minutes = parseInt(searchParams.get('minutes') || '30');
-      const points = Math.min(minutes, 60);
+      const limit = parseInt(searchParams.get('limit') || '100');
 
-      // Generate simulated reading history
-      const readings: { timestamp: string; value: number; status: string }[] = [];
-      const now = Date.now();
-      for (let i = points; i >= 0; i--) {
-        readings.push({
-          timestamp: new Date(now - i * 60000).toISOString(),
-          value: Math.round((50 + Math.random() * 30 + Math.sin(i / 5) * 10) * 100) / 100,
-          status: Math.random() > 0.9 ? 'warning' : Math.random() > 0.95 ? 'critical' : 'normal',
-        });
+      // Check if the sensor exists
+      const sensor = await db.ioTSensor.findUnique({
+        where: { id: sensorId },
+        select: { id: true, name: true, unit: true },
+      });
+
+      if (!sensor) {
+        return Response.json({ error: 'Capteur non trouvé' }, { status: 404 });
       }
 
-      return NextResponse.json({ sensorId, readings });
+      // Query readings from the database
+      const since = new Date(Date.now() - minutes * 60 * 1000);
+      const readings = await db.ioTReading.findMany({
+        where: {
+          sensorId,
+          recordedAt: { gte: since },
+        },
+        orderBy: { recordedAt: 'asc' },
+        take: limit,
+      });
+
+      return Response.json({
+        sensorId,
+        sensorName: sensor.name,
+        unit: sensor.unit,
+        readings,
+      });
     } catch (error: any) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return Response.json({ error: error.message }, { status: 500 });
     }
   },
   { roles: ['SUPER_ADMIN', 'DIRECTION_GENERALE', 'RESP_MAINTENANCE'] }

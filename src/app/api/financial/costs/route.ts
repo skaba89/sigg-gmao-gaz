@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { withAuth, type TokenPayload } from '@/lib/auth-utils';
+import { validateOrThrow, createMaintenanceCostSchema } from '@/lib/validations';
 
 export const GET = withAuth(
   async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
@@ -52,21 +53,18 @@ export const POST = withAuth(
   async (request: Request, context: { params: Promise<Record<string, string>> }, user: TokenPayload) => {
     try {
       const body = await request.json();
-
-      if (!body.siteId || !body.type || !body.amount) {
-        return Response.json({ error: 'Site, type et montant requis' }, { status: 400 });
-      }
+      const data = validateOrThrow(createMaintenanceCostSchema, body);
 
       const cost = await db.maintenanceCost.create({
         data: {
-          workOrderId: body.workOrderId,
-          equipmentId: body.equipmentId,
-          siteId: body.siteId,
-          type: body.type,
-          amount: body.amount,
-          currency: body.currency || 'GNF',
-          date: body.date ? new Date(body.date) : new Date(),
-          description: body.description,
+          workOrderId: data.workOrderId,
+          equipmentId: data.equipmentId,
+          siteId: data.siteId,
+          type: data.type,
+          amount: data.amount,
+          currency: data.currency,
+          date: data.date ? new Date(data.date) : new Date(),
+          description: data.description,
         },
         include: {
           workOrder: { select: { code: true, title: true } },

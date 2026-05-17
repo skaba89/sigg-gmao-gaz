@@ -47,6 +47,7 @@ model User {
   approvedPurchases     PurchaseOrder[]          @relation("PurchaseApprover")
   notifications         Notification[]
   blacklistedTokens     TokenBlacklist[]
+  acknowledgedAlerts    IoTAlert[]
 
   @@index([role])
   @@index([siteId])
@@ -115,6 +116,7 @@ model Site {
   costCenters        CostCenter[]
   maintenanceCosts   MaintenanceCost[]
   kpiRecords         KPIRecord[]
+  iotSensors         IoTSensor[]
 
   @@index([type])
   @@index([isActive])
@@ -207,6 +209,7 @@ model Equipment {
   incidents       Incident[]
   maintenancePlans MaintenancePlan[]
   maintenanceCosts MaintenanceCost[]
+  iotSensors      IoTSensor[]
 
   @@index([categoryId])
   @@index([siteId])
@@ -691,4 +694,81 @@ model KPIRecord {
   @@index([period])
   @@index([recordedAt])
   @@map("kpi_records")
+}
+
+// ============================================================
+// 11. IoT / SENSORS & MONITORING
+// ============================================================
+
+model IoTSensor {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  type          String   // TEMPERATURE, PRESSURE, VIBRATION, FLOW, LEVEL, GAS_LEAK
+  unit          String
+  equipmentId   String
+  siteId        String
+  minValue      Float
+  maxValue      Float
+  alertLow      Float?
+  alertHigh     Float?
+  criticalLow   Float?
+  criticalHigh  Float?
+  currentValue  Float?
+  status        String   @default("offline") // online, offline, warning, critical
+  battery       Int?
+  signal        Int?
+  lastReading   DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  equipment Equipment      @relation(fields: [equipmentId], references: [id])
+  site      Site           @relation(fields: [siteId], references: [id])
+  readings  IoTReading[]
+  alerts    IoTAlert[]
+
+  @@index([equipmentId])
+  @@index([siteId])
+  @@index([type])
+  @@index([status])
+  @@index([isActive])
+  @@map("iot_sensors")
+}
+
+model IoTReading {
+  id        String   @id @default(cuid())
+  sensorId  String
+  value     Float
+  status    String   @default("normal") // normal, warning, critical
+  recordedAt DateTime @default(now())
+
+  sensor IoTSensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  @@index([sensorId])
+  @@index([status])
+  @@index([recordedAt])
+  @@map("iot_readings")
+}
+
+model IoTAlert {
+  id             String    @id @default(cuid())
+  sensorId       String
+  type           String    // warning, critical
+  message        String
+  value          Float
+  threshold      Float
+  isAcknowledged Boolean   @default(false)
+  acknowledgedAt DateTime?
+  acknowledgedById String?
+  createdAt      DateTime  @default(now())
+
+  sensor        IoTSensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  acknowledgedBy User?    @relation(fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@index([sensorId])
+  @@index([type])
+  @@index([isAcknowledged])
+  @@index([createdAt])
+  @@map("iot_alerts")
 }
